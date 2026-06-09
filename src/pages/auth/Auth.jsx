@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getUserGoogleLoginUrl } from '../../api'
 
 function Auth() {
   const [tab, setTab] = useState('login')
@@ -15,12 +14,13 @@ function Auth() {
       const popup = window.open(
         'https://final-project-api-management.azure-api.net/auth/user/google',
         'GoogleLoginPopup',
-        'width=${loginWidth},height=${loginHeight},left=${left},top=${top}'
+        `width=${loginWidth},height=${loginHeight},left=${left},top=${top}`
       )
 
       window.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'LOGIN_SUCCESS') {
-          const {token} = event.datalocalStorage.setItem('accessToken', token)
+          const {token} = event.data
+          localStorage.setItem('accessToken', token)
           if (popup) popup.close()
             navigate('/library')
         }

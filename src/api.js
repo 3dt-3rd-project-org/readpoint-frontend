@@ -10,10 +10,10 @@ const authFetch = async (url, options = {}) => {
   const token = getToken()
   // FormData면 Content-Type 안 넣음 (브라우저가 자동으로 처리)
   const isFormData = options.body instanceof FormData
-  const res = await fetch(`${BASE_URL}$${url}`, {
+  const res = await fetch(`${BASE_URL}${url}`, {
     ...options,
     headers: {
-      ...(isForamData ? {} : { 'Content-Type': 'application/json '}),
+      ...(isFormData ? {} : { 'Content-Type': 'application/json'}),
       'Authorization': `Bearer ${getToken()}`,
       ...options.headers,
     }
@@ -36,7 +36,7 @@ export const getUserGoogleLoginUrl = () => {
   window.location.href = `${BASE_URL}/auth/user/google`
 }
 
-// Admin Books
+// ── Admin Books ──────────────────────────────────────
 // epub 업로드
 export const uploadBook = async (file) => {
   const formData = new FormData()
@@ -61,10 +61,10 @@ export const updateBook = (bookId, data) => authFetch(`/adm/books/${bookId}`, {
 
 // ── Reader Books ─────────────────────────────────────
 // 사용자 책 목록
-export const getBooks = () => authFetch('/reader/books')
+export const getBooks = () => authFetch('/books')
 
 // 책 상세
-export const getBookById = (bookId) => authFetch(`/reader/books/${bookId}`)
+export const getBookById = (bookId) => authFetch(`/books/${bookId}`)
 
 // 인물 관계도
 export const getBookRelations = (bookId, chapter) => authFetch(`/reader/books/${bookId}/relations?chapter=${chapter}`)

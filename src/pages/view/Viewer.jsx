@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ePub from 'epubjs'
-import { BookOpen, Users, Network, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Network, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getBookById, getBookRelations } from '../../api'
 
 function Viewer() {
   const { booksId } = useParams()
@@ -13,27 +14,37 @@ function Viewer() {
   const [currentHref, setCurrentHref] = useState('')
   const [showPersonPanel, setShowPersonPanel] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState(null)
+  const [bookInfo, setBookInfo] = useState(null)
+  const [persons, setPersons] = useState([])
+  const [currentP, setCurrentP] = useState(0)
 
-  // 더미 인물 데이터 - 나중에 API로 교체
-  const MOCK_PERSONS = [
-    { id: 1, name: '싱클레어', role: '화자/주인공', chapter: '제1장', desc: '내면 성장을 겪는 주인공' },
-    { id: 2, name: '데미안', role: '정신적 스승', chapter: '제1장', desc: '카인의 표식을 지닌 자' },
-    { id: 3, name: '베아트리체', role: '이상화된 여인', chapter: '제4장', desc: '싱클레어가 동경하는 소녀' },
-  ]
-
-  // 더미 epub URL - 나중에 ADLS blob URL로 교체
-  const epubUrl = 'https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub'
-
+  // 책 정보 가져오기
   useEffect(() => {
-    if (!viewerRef.current) return
+    getBookById(booksId)
+      .then(data => setBookInfo(data.book))
+      .catch(err => console.error(err))
+  }, [booksId])
 
-    const book = ePub(epubUrl)
+  // currentP 바뀔 때 인물 API 호출
+  useEffect(() => {
+    if (!booksId || currentP === 0) return
+    getBookRelations(booksId, currentP)
+      .then(data => setPersons(data.nodes || []))
+      .catch(err => console.error(err))
+  }, [booksId, currentP])
+
+  // epub 렌더링
+  useEffect(() => {
+    if (!viewerRef.current || !bookInfo?.epub_blob_path) return
+
+    const book = ePub(bookInfo.epub_blob_path)
     bookRef.current = book
 
     const rendition = book.renderTo(viewerRef.current, {
       width: '100%',
       height: '100%',
-      flow: 'paginated'
+      flow: 'scrolled',
+      allowScriptedContent: true
     })
 
     renditionRef.current = rendition
@@ -43,23 +54,25 @@ function Viewer() {
       setToc(nav.toc)
     })
 
+    let debounceTimer
     rendition.on('locationChanged', (location) => {
       setCurrentHref(location.start.href)
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        const p = location.start.displayed?.page || 0
+        setCurrentP(p)
+      }, 1000)
     })
 
     return () => book.destroy()
-  }, [])
+  }, [bookInfo])
 
   const prevPage = () => renditionRef.current?.prev()
   const nextPage = () => renditionRef.current?.next()
-
-  const goToChapter = (href) => {
-    renditionRef.current?.display(href)
-  }
+  const goToChapter = (href) => renditionRef.current?.display(href)
 
   return (
     <div className="flex h-[calc(100vh-80px)]">
-
       {/* 목차 */}
       <div className="w-52 border-r border-gray-200 bg-gray-50 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-200">
@@ -93,7 +106,7 @@ function Viewer() {
             <ChevronLeft size={16} />
             서재
           </button>
-          <p className="text-sm text-gray-500 font-medium">데미안</p>
+          <p className="text-sm text-gray-500 font-medium">{bookInfo?.title || '로딩 중...'}</p>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowPersonPanel(!showPersonPanel)}
@@ -125,35 +138,31 @@ function Viewer() {
                 <p className="text-xs text-gray-400 font-semibold">등장 인물</p>
               </div>
               <div className="flex-1 overflow-y-auto p-3">
-                {MOCK_PERSONS.map(person => (
-                  <button
-                    key={person.id}
-                    onClick={() => setSelectedPerson(selectedPerson?.id === person.id ? null : person)}
-                    className={`w-full text-left p-3 rounded-xl mb-2 transition-colors ${
-                      selectedPerson?.id === person.id
-                        ? 'bg-green-50 border border-green-200'
-                        : 'bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-900 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {person.name[0]}
+                {persons.length === 0 ? (
+                  <p className="text-xs text-gray-400 p-3">인물 데이터 준비 중...</p>
+                ) : (
+                  persons.map(person => (
+                    <button
+                      key={person.id}
+                      onClick={() => setSelectedPerson(selectedPerson?.id === person.id ? null : person)}
+                      className={`w-full text-left p-3 rounded-xl mb-2 transition-colors ${
+                        selectedPerson?.id === person.id
+                          ? 'bg-green-50 border border-green-200'
+                          : 'bg-gray-50 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-green-900 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
+                          {person.name?.[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{person.name}</p>
+                          <p className="text-xs text-gray-400">{person.role}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{person.name}</p>
-                        <p className="text-xs text-gray-400">{person.role}</p>
-                      </div>
-                    </div>
-                    {selectedPerson?.id === person.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-xs text-gray-400 mb-1">첫 등장</p>
-                        <p className="text-xs text-gray-700 mb-2">{person.chapter}</p>
-                        <p className="text-xs text-gray-400 mb-1">설명</p>
-                        <p className="text-xs text-gray-700">{person.desc}</p>
-                      </div>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}
