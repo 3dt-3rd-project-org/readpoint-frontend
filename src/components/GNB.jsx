@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 function GNB() {
   const location = useLocation()
-  const [isLoggedIn, setIsLoggedIn] = useState(false) // false = 로그인 안 된 상태
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('accessToken'))
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const navigate = useNavigate()
 

@@ -1,30 +1,24 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
-function Auth() {
-  const [tab, setTab] = useState('login')
-  const navigate = useNavigate()
+
+  function Auth() {
+    const [tab, setTab] = useState('login')
 
   const handleGoogleAuth = () => {
-      const loginWidth = 500
-      const loginHeight = 600
-      const left = window.screenX + (window.outerWidth - loginWidth)/2
-      const top = window.screenY + (window.outerHeight - loginHeight)/2
+    const GOOGLE_CLIENT_ID = '898813475333-g6vpbm9jgrvm4v8ec6525c73rcd52toq.apps.googleusercontent.com'
+    const REDIRECT_URI = 'http://localhost:5173/auth/callback'
+    
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `response_type=code` +
+      `&client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&scope=openid%20email%20profile` + // 구글에게 이메일, 프로필 정보를 넘기길 요청 
+      `&access_type=offline` + // 오프라인 상태에도 백앤드에서 구글 api를 호출할 수 있도록 리프레시 토큰을 달라
+      `&prompt=select_account` // 무조건 구글 계정 중 하나 선택
 
-      const popup = window.open(
-        'https://final-project-api-management.azure-api.net/auth/user/google',
-        'GoogleLoginPopup',
-        `width=${loginWidth},height=${loginHeight},left=${left},top=${top}`
-      )
-
-      window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'LOGIN_SUCCESS') {
-          const {token} = event.data
-          localStorage.setItem('accessToken', token)
-          if (popup) popup.close()
-            navigate('/library')
-        }
-      })
+    localStorage.setItem('loginType', tab === 'admin' ? 'admin' : 'user')
+    window.location.href = googleAuthUrl
   }
 
   return (
@@ -115,9 +109,13 @@ function Auth() {
         {/* 이용약관 */}
         <p className="mt-4 text-center text-xs text-gray-400">
           계속 진행하면{' '}
-          <span className="underline cursor-pointer hover:text-gray-600">이용약관</span>
+          <span 
+            onClick={() => alert('이용약관 내용: Readpoin 서비스를 이용해주셔서 감사합니다. 본 약관은 서비스 준비 중이므로 임시 적용됩니다.')}
+            className="underline cursor-pointer hover:text-gray-600">이용약관</span>
           {' '}및{' '}
-          <span className="underline cursor-pointer hover:text-gray-600">개인정보처리방침</span>
+          <span 
+            onClick={() => alert('개인정보처리방침: 수집하는 항목(이메일, 프로필 사진)은 구글 로그인 연동 및 서비스 제공 목적으로만 사용됩니다.')}
+            className="underline cursor-pointer hover:text-gray-600">개인정보처리방침</span>
           에 동의하는 것으로 간주합니다
         </p>
 

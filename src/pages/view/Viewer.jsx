@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ePub from 'epubjs'
 import { Users, Network, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getBookById, getBookRelations } from '../../api'
+import { getBookById, getBookRelations, getBookChapters } from '../../api'
 
 function Viewer() {
   const { booksId } = useParams()
@@ -17,6 +17,15 @@ function Viewer() {
   const [bookInfo, setBookInfo] = useState(null)
   const [persons, setPersons] = useState([])
   const [currentP, setCurrentP] = useState(0)
+  const [chapters, setChapters] = useState([])
+  // toc랑 매칭해서 href 찾기
+  const getHrefByTitle = (title) => {
+    const found = toc.find(item =>
+      item.label.includes(title) || title.includes(item.label)
+    )
+    return found?.href
+  }
+
 
   // 책 정보 가져오기
   useEffect(() => {
@@ -33,6 +42,12 @@ function Viewer() {
       .catch(err => console.error(err))
   }, [booksId, currentP])
 
+  useEffect(() => {
+    getBookChapters(booksId)
+      .then(data => setChapters(data.chapters || []))
+      .catch(err => console.error(err))
+  }, [booksId])
+
   // epub 렌더링
   useEffect(() => {
     if (!viewerRef.current || !bookInfo?.epub_blob_path) return
@@ -43,7 +58,8 @@ function Viewer() {
     const rendition = book.renderTo(viewerRef.current, {
       width: '100%',
       height: '100%',
-      flow: 'scrolled',
+      flow: 'scrolled', // 스크롤 방식
+      manager: 'continuous', // 다음 챕터도 세로로 연속해서 렌더링
       allowScriptedContent: true
     })
 
@@ -64,11 +80,13 @@ function Viewer() {
       }, 1000)
     })
 
-    return () => book.destroy()
+    return () => {
+      clearTimeout(debounceTimer)
+      renditionRef.current = null
+      book.destroy()
+    }
   }, [bookInfo])
 
-  const prevPage = () => renditionRef.current?.prev()
-  const nextPage = () => renditionRef.current?.next()
   const goToChapter = (href) => renditionRef.current?.display(href)
 
   return (
@@ -79,21 +97,37 @@ function Viewer() {
           <p className="text-xs text-gray-400 font-semibold">목차</p>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          {toc.map((item, i) => (
-            <button
-              key={i}
-              onClick={() => goToChapter(item.href)}
-              className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
-                currentHref === item.href
-                  ? 'bg-green-100 text-green-900 font-semibold'
-                  : 'text-gray-600'
-              }`}
-            >
-              {item.label}
+          {chapters.length > 0 ? (
+            chapters.map((chapter) => (
+              <button
+                key={chapter.chapter_id}
+                onClick={() => {
+                  const href = getHrefByTitle(chapter.title)
+                  if (href) goToChapter(href)
+                }}
+                className="w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 text-gray-600"
+              >
+              {chapter.title}
             </button>
-          ))}
-        </div>
-      </div>
+          ))
+        ) : (
+        toc.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => goToChapter(item.href)}
+            className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
+              currentHref === item.href
+                ? 'bg-green-100 text-green-900 font-semibold'
+                : 'text-gray-600'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))
+      )}
+    </div>
+  </div>
+      
 
       {/* 본문 */}
       <div className="flex-1 flex flex-col">
@@ -129,7 +163,7 @@ function Viewer() {
 
         {/* epub 렌더링 영역 */}
         <div className="flex flex-1 overflow-hidden">
-          <div ref={viewerRef} className="flex-1" />
+          <div ref={viewerRef} className="flex-1 overflow-y-auto h-full" />
 
           {/* 인물 패널 */}
           {showPersonPanel && (
@@ -166,24 +200,6 @@ function Viewer() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* 하단 페이지 이동 */}
-        <div className="flex justify-center items-center gap-8 py-3 border-t border-gray-200 bg-white">
-          <button
-            onClick={prevPage}
-            className="flex items-center gap-1 px-5 py-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm"
-          >
-            <ChevronLeft size={16} />
-            이전
-          </button>
-          <button
-            onClick={nextPage}
-            className="flex items-center gap-1 px-5 py-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm"
-          >
-            다음
-            <ChevronRight size={16} />
-          </button>
         </div>
       </div>
     </div>

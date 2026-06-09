@@ -1,11 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { connectWebSocket, disconnectWebSocket } from '../../websocket'
+import { uploadBook, getAdminBooks } from '../../api'
 
-const MOCK_STATS = {
-  totalRuns: 24,
-  successRate: 87.5,
-  avgTime: '4분 32초',
-  recentErrors: 3,
-}
+
 
 const MOCK_BOOKS = [
   { id: 1, title: '데미안',  author: '헤르만 헤세', status: 'done' },
@@ -33,38 +30,70 @@ const LOG_ICON = {
 }
 
 function Dashboard() {
-  const [books, setBooks] = useState(MOCK_BOOKS)
+  const [books, setBooks] = useState([])
   const [dragOver, setDragOver] = useState(false)
-  const [fileName, setFileName] = useState('')
+  const [file, setFile] = useState(null)
   const fileInputRef = useRef(null)
 
-  const handleFile = (file) => {
-    if (!file) return
-    if (!file.name.endsWith('.epub')) {
+  useEffect(() => {
+    getAdminBooks()
+      .then(data => setBooks(data.books || []))
+      .catch(err => console.error(err))
+  }, [])
+
+  const handleFile = (selectedFile) => {
+    if (!selectedFile) return
+    if (!selectedFile.name.endsWith('.epub')) {
       alert('.epub 파일만 업로드 가능합니다.')
       return
     }
-    setFileName(file.name)
+    setFile(selectedFile)
   }
 
   const handleDrop = (e) => {
-    e.preventDefault()
+    e.preventDefault() // 브라우저의 본래 성질(예: 브라우저 창에 .epub 파일을 떨어뜨리면 브라우저가 직접 파일을 열어버리는 기본 동작)을 강제로 멈추기
     setDragOver(false)
     handleFile(e.dataTransfer.files[0])
   }
 
-  const handleUpload = () => {
-    if (!fileName) { fileInputRef.current?.click(); return }
-    setFileName('')
+  const handleUpload = async() => {
+    if (!file) { fileInputRef.current?.click(); return }
+    
+    try {
+      await uploadBook(file)
+      alert('파일이 성공적으로 업로드되었습니다.')
+      setFile(null) // 업로드 후 파일 비우기
+    } catch (error) {
+      console.error('업로드 실패:', error)
+      alert('파일 업로드 중 오류가 발생했습니다.')
+    }
   }
 
+  // 등록된 책 목록 중 오류 상태로 멈췄을 때 재시도하는 로직
   const handleRetry = (bookId) => {
     setBooks(prev => prev.map(b => b.id === bookId ? { ...b, status: 'running' } : b))
   }
 
+  // 1단계 파이프라인 후 2단계 파이프라인 수동 실행 api
   const handleRunDAG2 = (bookId) => {
     console.log('DAG2 실행:', bookId)
   }
+  // 웹 소켓 연결
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+
+    if (!token || token === 'null') {
+      console.warn("로그인 토큰이 없으므로 웹소켓 연결을 보류합니다.");
+      return;
+    }
+    connectWebSocket((message) => {
+      console.log('웹소켓 메시지:', message)
+      // 나중에 알람 팝업 추가
+    })
+
+    // 컴포넌트 언마운트 시 안전하게 소켓 차단
+    return () => disconnectWebSocket()
+  }, [])
 
   return (
     <>
@@ -115,7 +144,7 @@ function Dashboard() {
             }`}
           >
             <p className="text-sm text-gray-400">
-              {fileName || '파일을 여기에 끌어놓거나 클릭하세요  (.epub)'}
+              {file ? file.name : '파일을 여기에 끌어놓거나 클릭하세요  (.epub)'}
             </p>
             <input
               ref={fileInputRef}

@@ -7,17 +7,27 @@ function Graph() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedNode, setSelectedNode] = useState(null)
   const [books, setBooks] = useState([])
-  const [currentChapter, setCurrentChapter] = useState(100)
+  const [currentChapter, setCurrentChapter] = useState(100) // 챕터 수 100으로 고정
   const [bookTitle, setBookTitle] = useState('')
   const cyRef = useRef(null)
   const cyInstance = useRef(null)
-
+  const [maxChapter, setMaxChapter] = useState(10)
   const bookId = searchParams.get('bookId')
 
   // 책 목록 가져오기
   useEffect(() => {
     getBooks().then(data => setBooks(data.books || []))
   }, [])
+
+  // 책 선택 시 챕터 수 업데이트
+  useEffect(() => {
+    if (!bookId) return
+    const selectedBook = books.find(b => String(b.books_id) === String(bookId))
+    if (selectedBook) {
+      setBookTitle(selectedBook.title)
+      setMaxChapter(selectedBook.chapter_count || 10) //기본 값 10
+    }
+  }, [bookId, books])
 
   // 관계도 데이터 가져오기
   useEffect(() => {
@@ -71,7 +81,7 @@ function Graph() {
               }
             },
             {
-              selector: 'node:selected',
+              selector: 'node:selected', // 마우스로 클릭 시 
               style: { 'background-color': '#4CAF7D' }
             }
           ],
@@ -142,7 +152,7 @@ function Graph() {
             <input
               type="range"
               min={1}
-              max={500}
+              max={maxChapter}
               value={currentChapter}
               onChange={(e) => setCurrentChapter(Number(e.target.value))}
               className="w-32 accent-green-700"

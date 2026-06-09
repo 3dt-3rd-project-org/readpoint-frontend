@@ -1,9 +1,9 @@
 const BASE_URL = 'https://final-project-api-management.azure-api.net'
 
 // 토큰 저장/조회/삭제
-export const setToken = (token) => localStorage.setItem('token', token)
-export const getToken = () => localStorage.getItem('token')
-export const removeToken = () => localStorage.removeItem('token')
+export const setToken = (token) => localStorage.setItem('accesstoken', token)
+export const getToken = () => localStorage.getItem('accesstoken')
+export const removeToken = () => localStorage.removeItem('accesstoken')
 
 // 공통 fetch 함수 (토큰 자동 첨부)
 const authFetch = async (url, options = {}) => {
@@ -36,6 +36,18 @@ export const getUserGoogleLoginUrl = () => {
   window.location.href = `${BASE_URL}/auth/user/google`
 }
 
+// 사용자 로그인 (code -> JWT 토큰)
+export const userLogin = (code) => authFetch('/auth/user/login', {
+  method: 'POST',
+  body: JSON.stringify({ code })
+})
+
+// 관리자 로그인 (code -> JWT 토큰)
+export const adminLogin = (code) => authFetch('/auth/admin/login', {
+  method: 'POST',
+  body: JSON.stringify({ code })
+})
+
 // ── Admin Books ──────────────────────────────────────
 // epub 업로드
 export const uploadBook = async (file) => {
@@ -66,10 +78,14 @@ export const getBooks = () => authFetch('/books')
 // 책 상세
 export const getBookById = (bookId) => authFetch(`/books/${bookId}`)
 
+// 챕터 목록
+export const getBookChapters = (bookId) => authFetch(`/books/${bookId}/chapters`)
+
 // 인물 관계도
-export const getBookRelations = (bookId, chapter) => authFetch(`/reader/books/${bookId}/relations?chapter=${chapter}`)
+export const getBookRelations = (bookId, chapter, p = 1) => 
+  authFetch(`/books/${bookId}/relations?c=${chapter}&p=${p}`)
 
 // ── WebPubSub ─────────────────────────────────
 // 웹소켓 토큰
-export const getWebPubSubToken = () => authFetch('/adm/negotiate')
+export const getWebPubSubToken = () => authFetch('/adm/analyze/token')
 
