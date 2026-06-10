@@ -1,9 +1,9 @@
 const BASE_URL = 'https://final-project-api-management.azure-api.net'
 
 // 토큰 저장/조회/삭제
-export const setToken = (token) => localStorage.setItem('accesstoken', token)
-export const getToken = () => localStorage.getItem('accesstoken')
-export const removeToken = () => localStorage.removeItem('accesstoken')
+export const setToken = (token) => localStorage.setItem('accessToken', token)
+export const getToken = () => localStorage.getItem('accessToken')
+export const removeToken = () => localStorage.removeItem('accessToken')
 
 // 공통 fetch 함수 (토큰 자동 첨부)
 const authFetch = async (url, options = {}) => {
