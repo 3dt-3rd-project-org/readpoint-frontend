@@ -3,9 +3,11 @@ import { getWebPubSubToken } from "./api";
 let socket = null
 
 export const connectWebSocket = async (onMessage) => {
+  if (socket) return // ← 이미 연결돼있으면 중복 연결 방지
+
   try {
     const data = await getWebPubSubToken()
-    const wsUrl = data.url  // ← data.wsUrl → data.url 수정
+    const wsUrl = data.url 
 
     if (!wsUrl) {
       console.warn('웹소켓 URL을 받지 못했습니다.')

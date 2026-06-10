@@ -213,10 +213,10 @@ function Dashboard() {
 
     connectWebSocket((message) => {
       if (!isActive) return 
-      
+
       console.log('웹소켓 메시지 수신:', message)
 
-      const incomingStatus = (message.status || '').toUpperCase()
+      const incomingStatus = (message.event || message.status || '').toUpperCase()
 
       // 1. 상태별로 알림창에 띄울 깔끔한 기본 한글 문구 정의
       const DEFAULT_MESSAGES = {
@@ -230,7 +230,7 @@ function Dashboard() {
       const logText = message.message 
         || message.error // 👈 ADF가 보낸 진짜 에러 메시지("@{activity(...).error.message}")를 여기서 낚아챕니다!
         || DEFAULT_MESSAGES[incomingStatus] 
-        || `${message.status} — Book ID: ${message.book_id || message.book?.books_id}`
+        || `${incomingStatus} — Book ID: ${message.book_id || message.book?.books_id}`
 
       const newLog = {
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
@@ -250,7 +250,7 @@ function Dashboard() {
         'METADATA_ERROR'
       ]
 
-      if (refreshEvents.includes(message.status)) {
+      if (refreshEvents.includes(incomingStatus)) {
         fetchBooks()
       }
     })
