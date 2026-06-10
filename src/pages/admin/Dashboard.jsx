@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
-import { uploadBook, getAdminBooks, analyzeBook } from '../../api'
+import { uploadBook, getAdminBooks, analyzeBook, summarizeBook, approveAnalysis, approveSummary } from '../../api'
 
 const MOCK_STATS = {
   totalRuns: 24,
@@ -8,6 +8,7 @@ const MOCK_STATS = {
   avgTime: '4분 32초',
   recentErrors: 3,
 }
+
 const STATUS_MAP = {
   READY:                { label: '📂 분석 전', className: 'text-blue-500' },
   ANALYZING:            { label: '⏳ 분석 중', className: 'text-yellow-600' },
@@ -80,13 +81,23 @@ function Dashboard() {
     }
   }
 
-  // 오류 상태 책 재시도 로직
+  // ==========================================
+  // ⚙️ 여기서부터 진짜 작동하는 핵심 핸들러 함수들
+  // ==========================================
+
+  // 1. [재시도] 핸들러
   const handleRetry = async (bookId) => {
-    // 1. 낙관적 업데이트: 화면에서 먼저 'ANALYZING'으로 상태를 변경
     setBooks(prev => prev.map(b => {
       const currentId = b.books_id || b.id
       return currentId === bookId ? { ...b, status: 'ANALYZING' } : b
     }))
+
+    const initLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'running',
+      text: `🔄 관리자가 재시도를 시작했습니다. (Book ID: ${bookId})`
+    }
+    setLogs(prev => [initLog, ...prev])
 
     try {
       await analyzeBook(bookId)
@@ -99,13 +110,19 @@ function Dashboard() {
     }
   }
 
-  // 1차 파이프라인 수동 실행
+  // 2. [1차 분석 시작] 핸들러 (★에러 범인 등장! 여기에 완벽하게 선언해 두었습니다)
   const handleAnalyze = async (bookId) => {
-    // 버튼 클릭 즉시 상태를 'ANALYZING'으로 바꾸어 연타 방지 및 UX 개선
     setBooks(prev => prev.map(b => {
       const currentId = b.books_id || b.id
       return currentId === bookId ? { ...b, status: 'ANALYZING' } : b
     }))
+
+    const initLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'running',
+      text: `🚀 관리자가 1차 분석 파이프라인을 시작했습니다. (Book ID: ${bookId})`
+    }
+    setLogs(prev => [initLog, ...prev])
 
     try {
       await analyzeBook(bookId)
@@ -118,15 +135,68 @@ function Dashboard() {
     }
   }
 
-  // 2차 파이프라인 실행 핸들러 (틀 잡아두기)
-  const handleSecondaryAnalyze = async (bookId) => {
+  // 3. [1차 검수 승인] 핸들러
+  const handleApproveAnalysis = async (bookId) => {
+    const initLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'success',
+      text: `👍 관리자가 1차 분석 결과를 승인했습니다. (Book ID: ${bookId})`
+    }
+    setLogs(prev => [initLog, ...prev])
+
     try {
-      console.log('2차 분석 시작 API 호출:', bookId)
-      // await analyzeBookSecondary(bookId) // 실제 2차 API가 있다면 여기에 연결
-      // alert('2차 분석을 시작합니다.')
-      // fetchBooks()
+      await approveAnalysis(bookId)
+      alert('1차 검수가 승인되었습니다.')
+      fetchBooks()
     } catch (error) {
-      console.error('2차 분석 실패:', error)
+      console.error('1차 승인 실패:', error)
+      alert('승인 처리 중 오류가 발생했습니다.')
+      fetchBooks()
+    }
+  }
+
+  // 4. [요약 생성] 핸들러
+  const handleSummarize = async (bookId) => {
+    setBooks(prev => prev.map(b => {
+      const currentId = b.books_id || b.id
+      return currentId === bookId ? { ...b, status: 'SUMMARIZING' } : b
+    }))
+
+    const initLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'running',
+      text: `📝 관리자가 요약 및 관계도 생성 파이프라인을 시작했습니다. (Book ID: ${bookId})`
+    }
+    setLogs(prev => [initLog, ...prev])
+
+    try {
+      await summarizeBook(bookId)
+      alert('요약 생성을 시작합니다.')
+      fetchBooks()
+    } catch (error) {
+      console.error('요약 생성 실패:', error)
+      alert('요약 생성 중 오류가 발생했습니다.')
+      fetchBooks()
+    }
+  }
+
+  // 5. [2차 검수 승인] 핸들러
+  const handleApproveSummary = async (bookId) => {
+    const initLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'success',
+      text: `🌐 관리자가 최종 요약을 승인하여 서비스를 배포했습니다! (Book ID: ${bookId})`
+    }
+    setLogs(prev => [initLog, ...prev])
+
+    try {
+      await approveSummary(bookId)
+      alert('최종 검수가 승인되어 서비스에 반영되었습니다.')
+      fetchBooks()
+    } catch (error) {
+      console.error('최종 승인 실패:', error)
+      alert('최종 승인 처리 중 오류가 발생했습니다.')
+      fetchBooks()
     }
   }
 
@@ -139,29 +209,48 @@ function Dashboard() {
       return
     }
 
+    let isActive = true
+
     connectWebSocket((message) => {
-      console.log('웹소켓 메시지:', message)
+      if (!isActive) return 
+      
+      console.log('웹소켓 메시지 수신:', message)
+
+      const incomingStatus = (message.status || '').toUpperCase()
+
+      // 1. 상태별로 알림창에 띄울 깔끔한 기본 한글 문구 정의
+      const DEFAULT_MESSAGES = {
+        'ANALYZING_FINISHED': '🎉 1차 본문 분석 파이프라인이 완료되었습니다! (검수 필요)',
+        'SUMMARIZING_COMPLETE': '🎉 요약 및 관계도 생성 파이프라인이 완료되었습니다! (최종 검수 필요)',
+        'ANALYZING_ERROR': '❌ 1차 본문 분석 중 오류가 발생했습니다.',
+        'SUMMARY_ERROR': '❌ 요약 생성 중 오류가 발생했습니다.'
+      }
+
+      // 2. 텍스트 우선순위 결정: 백엔드가 준 메세지 -> 에러 원인 메세지 -> 기본 매핑 문구 -> 정 없으면 기본 기계 스펙
+      const logText = message.message 
+        || message.error // 👈 ADF가 보낸 진짜 에러 메시지("@{activity(...).error.message}")를 여기서 낚아챕니다!
+        || DEFAULT_MESSAGES[incomingStatus] 
+        || `${message.status} — Book ID: ${message.book_id || message.book?.books_id}`
 
       const newLog = {
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        type: message.event === 'ERROR' || message.event === 'METADATA_ERROR' ? 'error'
-              : message.event === 'PROGRESS' ? 'running'
+        type: incomingStatus.includes('ERROR') ? 'error'
+              : incomingStatus.status?.includes('PROGRESS') ? 'running'
               : 'success',
-        text: message.message || `${message.event} — Book ID: ${message.book_id || message.book?.books_id}`
+        text: logText
       }
       setLogs(prev => [newLog, ...prev]) 
       
-      // METADATA_COMPLETE 이벤트 받으면 해당 책 status 업데이트
-      if (message.event === 'METADATA_COMPLETE' && message.book) {
-        setBooks(prev => prev.map(b =>
-          String(b.books_id || b.id) === String(message.book.books_id || message.book.id)
-            ? { ...b, status: 'METADATA_COMPLETE' }
-            : b
-        ))
-      }
+      const refreshEvents = [
+        'ANALYZING_FINISHED',
+        'ANALYZING_ERROR',   
+        'SUMMARIZING_COMPLETE',
+        'SUMMARY_ERROR',       
+        'METADATA_COMPLETE',   
+        'METADATA_ERROR'
+      ]
 
-      // COMPLETE, ERROR 이벤트 받으면 책 목록 전체 새로고침
-      if (['COMPLETE', 'ERROR', 'METADATA_ERROR'].includes(message.event)) {
+      if (refreshEvents.includes(message.status)) {
         fetchBooks()
       }
     })
@@ -249,11 +338,12 @@ function Dashboard() {
           </div>
           {books.map((book, i) => {
             const currentId = book.books_id || book.id 
+            const isError = ['ANALYZING_ERROR', 'SUMMARY_ERROR'].includes(book.status)
             return (
               <div
                 key={currentId}
                 className={`grid grid-cols-4 px-5 py-4 items-center text-sm ${
-                  book.status === 'ERROR' ? 'bg-red-50' : 'bg-white'
+                  isError ? 'bg-red-50' : 'bg-white'
                 } ${i !== books.length - 1 ? 'border-b border-gray-100' : ''}`}
               >
                 <span className="font-medium text-gray-900">{book.title}</span>
@@ -263,26 +353,32 @@ function Dashboard() {
                 </span>
                 <span className="flex gap-2">
                   {book.status === 'READY' && (
-                    <button
-                      onClick={() => handleAnalyze(currentId)}
-                      className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm"
-                    >
-                      1차 분석 시작(인물, 관계도)
+                    <button onClick={() => handleAnalyze(currentId)}
+                      className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">
+                      1차 분석 시작
+                    </button>
+                  )}
+                  {book.status === 'ANALYZING_FINISHED' && (
+                    <button onClick={() => handleApproveAnalysis(currentId)}
+                      className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm">
+                      1차 검수 승인
                     </button>
                   )}
                   {book.status === 'ANALYZING_COMPLETE' && (
-                    <button
-                      onClick={() => handleSecondaryAnalyze(currentId)}
-                      className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm"
-                    >
-                      2차 분석 시작(요약)
+                    <button onClick={() => handleSummarize(currentId)}
+                      className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">
+                      요약 생성
                     </button>
                   )}
-                  {['ANALYZING_ERROR', 'SUMMARY_ERROR'].includes(book.status) && (
-                    <button
-                      onClick={() => handleRetry(currentId)}
-                      className="px-4 py-1.5 bg-red-50 text-red-500 border border-red-300 text-xs font-semibold rounded-lg hover:bg-red-100 transition-colors shadow-sm"
-                    >
+                  {book.status === 'SUMMARIZING_COMPLETE' && (
+                    <button onClick={() => handleApproveSummary(currentId)}
+                      className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm">
+                      2차 검수 승인
+                    </button>
+                  )}
+                  {isError && (
+                    <button onClick={() => handleRetry(currentId)}
+                      className="px-4 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-sm">
                       재시도
                     </button>
                   )}
