@@ -34,7 +34,7 @@ function Callback() {
           const cleanToken = data.token.replace('Bearer ', '')
           setToken(cleanToken)
           localStorage.setItem('accessToken', cleanToken)
-          
+          localStorage.setItem('role', data.user.role) // role도 저장
           const targetPath = loginType === 'admin' ? '/admin' : '/library'
           navigate(targetPath, { replace: true })
         } else {

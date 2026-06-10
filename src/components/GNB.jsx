@@ -1,12 +1,14 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react' // useRef 추가
 
+
 function GNB() {
   const location = useLocation()
   const navigate = useNavigate()
   const dropdownRef = useRef(null) // 드롭다운 외부 클릭 감지용
-
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('accessToken'))
+  const [role, setRole] = useState(localStorage.getItem('role')) 
+
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
   // 더미 데이터 (추후 API나 전역 상태로 대체)
@@ -19,6 +21,7 @@ function GNB() {
   useEffect(() => {
     const checkLogin = () => {
       setIsLoggedIn(!!localStorage.getItem('accessToken'))
+      setRole(localStorage.getItem('role'))
     }
     window.addEventListener('storage', checkLogin)
     return () => window.removeEventListener('storage', checkLogin)
@@ -27,6 +30,7 @@ function GNB() {
   // 2. 페이지(location) 변경 시마다 로그인 확인 + 드롭다운 닫기
   useEffect(() => {
     setIsLoggedIn(!!localStorage.getItem('accessToken'))
+    setRole(localStorage.getItem('role'))
     setDropdownOpen(false) // 페이지 이동하면 드롭다운은 닫아주는 게 자연스러워요.
   }, [location])
 
@@ -47,8 +51,10 @@ function GNB() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('loginType')
+    localStorage.removeItem('role')
     setIsLoggedIn(false)
     setDropdownOpen(false)
+    setRole(null)
     navigate('/')
   }
 
@@ -64,7 +70,7 @@ function GNB() {
         {[
           { path: '/library', label: '서재' },
           { path: '/graph', label: '관계도' },
-          { path: '/admin', label: '관리' },
+          ...(role === 'ADMIN' ? [{ path: '/admin', label: '관리' }] : []), 
         ].map(({ path, label }) => (
           <Link
             key={path}
