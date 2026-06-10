@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
-import { uploadBook, getAdminBooks } from '../../api' // 추후 retryBookApi 같은 게 있다면 추가
+import { uploadBook, getAdminBooks, analyzeBook } from '../../api'
 
 const MOCK_STATS = {
   totalRuns: 24,
@@ -8,12 +8,16 @@ const MOCK_STATS = {
   avgTime: '4분 32초',
   recentErrors: 3,
 }
-
 const STATUS_MAP = {
-  COMPLETE:   { label: '✅ 분석완료', className: 'text-green-600' },
-  METADATA_COMPLETE: { label: '📋 검수 대기', className: 'text-blue-500' },
-  ANALYZING:  { label: '⏳ 분석중',   className: 'text-yellow-600' },
-  ERROR:      { label: '❌ 오류 발생', className: 'text-red-500' },
+  READY:                { label: '📂 분석 전', className: 'text-blue-500' },
+  ANALYZING:            { label: '⏳ 분석 중', className: 'text-yellow-600' },
+  ANALYZING_ERROR:      { label: '❌ 분석 실패', className: 'text-red-500' },
+  ANALYZING_FINISHED:   { label: '🔍 1차 검수 필요', className: 'text-purple-500' },
+  ANALYZING_COMPLETE:   { label: '✅ 1차 검수 완료', className: 'text-green-500' },
+  SUMMARIZING:          { label: '⏳ 요약 중', className: 'text-yellow-600' },
+  SUMMARY_ERROR:        { label: '❌ 요약 실패', className: 'text-red-500' },
+  SUMMARIZING_COMPLETE: { label: '🔍 최종 검수 필요', className: 'text-purple-500' },
+  COMPLETE:             { label: '🌐 업로드 완료', className: 'text-green-600' },
 }
 
 const LOG_ICON = {
@@ -24,7 +28,7 @@ const LOG_ICON = {
 
 function Dashboard() {
   const [books, setBooks] = useState([])
-  const [logs, setLogs] = useState([]) // 실시간 로그도 상태로 관리하여 업데이트 가능하게 변경
+  const [logs, setLogs] = useState([]) 
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState(null)
   const fileInputRef = useRef(null)
@@ -69,7 +73,7 @@ function Dashboard() {
       await uploadBook(file)
       alert('파일이 성공적으로 업로드되었습니다.')
       setFile(null)
-      fetchBooks() // 업로드 성공 후 목록 최신화
+      fetchBooks() 
     } catch (error) {
       console.error('업로드 실패:', error)
       alert('파일 업로드 중 오류가 발생했습니다.')
@@ -78,27 +82,52 @@ function Dashboard() {
 
   // 오류 상태 책 재시도 로직
   const handleRetry = async (bookId) => {
-    // 1. 화면에서 먼저 'running'으로 상태를 바꿔 시각적 피드백 제공
+    // 1. 낙관적 업데이트: 화면에서 먼저 'ANALYZING'으로 상태를 변경
     setBooks(prev => prev.map(b => {
       const currentId = b.books_id || b.id
-      return currentId === bookId ? { ...b, status: 'running' } : b
+      return currentId === bookId ? { ...b, status: 'ANALYZING' } : b
     }))
 
     try {
-      // 2. 실제 백엔드 재시도 API 호출 예시 (프로젝트 스펙에 맞게 주석 해제하여 사용하세요)
-      // await retryBookApi(bookId)
-      // fetchBooks() 
+      await analyzeBook(bookId)
+      alert('분석을 다시 시작합니다.')
+      fetchBooks()
     } catch (error) {
       console.error('재시도 실패:', error)
       alert('재시도 요청 중 오류가 발생했습니다.')
-      fetchBooks() // 에러 시 원래 상태로 복구하기 위해 리프레시
+      fetchBooks() 
     }
   }
 
-  // DAG2 파이프라인 수동 실행
-  const handleRunDAG2 = (bookId) => {
-    console.log('DAG2 실행:', bookId)
-    // 추후 runDag2Api(bookId) 같은 API 연동 필요
+  // 1차 파이프라인 수동 실행
+  const handleAnalyze = async (bookId) => {
+    // 버튼 클릭 즉시 상태를 'ANALYZING'으로 바꾸어 연타 방지 및 UX 개선
+    setBooks(prev => prev.map(b => {
+      const currentId = b.books_id || b.id
+      return currentId === bookId ? { ...b, status: 'ANALYZING' } : b
+    }))
+
+    try {
+      await analyzeBook(bookId)
+      alert('분석을 시작합니다.')
+      fetchBooks()
+    } catch (error) {
+      console.error('분석 시작 실패:', error)
+      alert('분석 시작 중 오류가 발생했습니다.')
+      fetchBooks()
+    }
+  }
+
+  // 2차 파이프라인 실행 핸들러 (틀 잡아두기)
+  const handleSecondaryAnalyze = async (bookId) => {
+    try {
+      console.log('2차 분석 시작 API 호출:', bookId)
+      // await analyzeBookSecondary(bookId) // 실제 2차 API가 있다면 여기에 연결
+      // alert('2차 분석을 시작합니다.')
+      // fetchBooks()
+    } catch (error) {
+      console.error('2차 분석 실패:', error)
+    }
   }
 
   // 웹 소켓 연결 및 실시간 데이터 수신
@@ -120,26 +149,27 @@ function Dashboard() {
               : 'success',
         text: message.message || `${message.event} — Book ID: ${message.book_id || message.book?.books_id}`
       }
-      setLogs(prev => [newLog, ...prev]) // 최신로그가 위에서부터
+      setLogs(prev => [newLog, ...prev]) 
       
       // METADATA_COMPLETE 이벤트 받으면 해당 책 status 업데이트
       if (message.event === 'METADATA_COMPLETE' && message.book) {
         setBooks(prev => prev.map(b =>
-          String(b.books_id) === String(message.book.books_id)
-            ? {...b, ststus: 'METADATA_COMPLETE' }
+          String(b.books_id || b.id) === String(message.book.books_id || message.book.id)
+            ? { ...b, status: 'METADATA_COMPLETE' }
             : b
         ))
       }
 
       // COMPLETE, ERROR 이벤트 받으면 책 목록 전체 새로고침
       if (['COMPLETE', 'ERROR', 'METADATA_ERROR'].includes(message.event)) {
-        getAdminBooks().then(data => setBooks(data.books || []))
-  }
+        fetchBooks()
+      }
     })
 
     return () => disconnectWebSocket()
   }, [])
-return (
+
+  return (
     <>
       <h1 className="text-xl font-bold text-gray-900 mb-6">파이프라인 현황</h1>
 
@@ -215,10 +245,10 @@ return (
             <span>제목</span>
             <span>저자</span>
             <span>상태</span>
-            <span>액션</span>
+            <span>조치</span>
           </div>
           {books.map((book, i) => {
-            const currentId = book.books_id || book.id; // 안전하게 고유 ID 추출
+            const currentId = book.books_id || book.id 
             return (
               <div
                 key={currentId}
@@ -231,24 +261,27 @@ return (
                 <span className={`font-medium ${STATUS_MAP[book.status]?.className || 'text-gray-500'}`}>
                   {STATUS_MAP[book.status]?.label || book.status}
                 </span>
-                <span>
-                  {book.status === 'METADATA_COMPLETE' && ( 
+                <span className="flex gap-2">
+                  {book.status === 'READY' && (
                     <button
-                      onClick={() => handleRunDAG2(currentId)}
-                      className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800 transition-colors"
+                      onClick={() => handleAnalyze(currentId)}
+                      className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm"
                     >
-                      분석 시작
+                      1차 분석 시작(인물, 관계도)
                     </button>
                   )}
-                  {book.status === 'COMPLETE' && (
-                    <button onClick={() => {}}>
-                      2차 분석 시작
+                  {book.status === 'ANALYZING_COMPLETE' && (
+                    <button
+                      onClick={() => handleSecondaryAnalyze(currentId)}
+                      className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm"
+                    >
+                      2차 분석 시작(요약)
                     </button>
                   )}
-                  {book.status === 'ERROR' && (
+                  {['ANALYZING_ERROR', 'SUMMARY_ERROR'].includes(book.status) && (
                     <button
                       onClick={() => handleRetry(currentId)}
-                      className="text-sm text-red-500 font-medium hover:underline"
+                      className="px-4 py-1.5 bg-red-50 text-red-500 border border-red-300 text-xs font-semibold rounded-lg hover:bg-red-100 transition-colors shadow-sm"
                     >
                       재시도
                     </button>
@@ -256,7 +289,7 @@ return (
                 </span>
               </div>
             )
-          })} {/* 맵 컴포넌트 괄호 구조 정상 복구 */}
+          })} 
         </div>
       </div>
 
