@@ -1,15 +1,55 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react' // useRef 추가
 
 function GNB() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const dropdownRef = useRef(null) // 드롭다운 외부 클릭 감지용
+
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('accessToken'))
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const navigate = useNavigate()
 
+  // 더미 데이터 (추후 API나 전역 상태로 대체)
   const user = {
     name: '박기원',
     email: 'user@gmail.com'
+  }
+
+  // 1. 다른 탭에서 로그인/로그아웃 시 상태 동기화
+  useEffect(() => {
+    const checkLogin = () => {
+      setIsLoggedIn(!!localStorage.getItem('accessToken'))
+    }
+    window.addEventListener('storage', checkLogin)
+    return () => window.removeEventListener('storage', checkLogin)
+  }, [])
+
+  // 2. 페이지(location) 변경 시마다 로그인 확인 + 드롭다운 닫기
+  useEffect(() => {
+    setIsLoggedIn(!!localStorage.getItem('accessToken'))
+    setDropdownOpen(false) // 페이지 이동하면 드롭다운은 닫아주는 게 자연스러워요.
+  }, [location])
+
+  // 3. 드롭다운 바깥 영역 클릭 시 자동으로 드롭다운 닫기
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick)
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [dropdownOpen])
+
+  // 로그아웃 핸들러
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('loginType')
+    setIsLoggedIn(false)
+    setDropdownOpen(false)
+    navigate('/')
   }
 
   return (
@@ -28,7 +68,7 @@ function GNB() {
         ].map(({ path, label }) => (
           <Link
             key={path}
-            to={isLoggedIn ? path : '/auth'}  // ← 로그인 안 됐으면 /auth로
+            to={isLoggedIn ? path : '/auth'}
             className={`text-base font-medium px-4 py-2 rounded-full transition-colors ${
               location.pathname === path
                 ? 'bg-green-900 text-white'
@@ -43,7 +83,7 @@ function GNB() {
 
         {isLoggedIn ? (
           /* 로그인 상태 */
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-2 text-base font-medium text-gray-700 hover:text-green-900 transition-colors"
@@ -67,10 +107,7 @@ function GNB() {
                     내 프로필
                   </button>
                   <button
-                    onClick={() => {
-                      setIsLoggedIn(false)
-                      setDropdownOpen(false)
-                    }}
+                    onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50"
                   >
                     로그아웃
@@ -81,14 +118,12 @@ function GNB() {
           </div>
         ) : (
           /* 비로그인 상태 */
-          <>
-            <button
-              onClick={() => navigate('/auth')}
-               className="text-base font-semibold bg-green-900 text-white px-4 py-2 rounded-full hover:bg-green-800 transition-colors"
-            >
-              로그인 / 회원가입
-            </button>
-          </>
+          <button
+            onClick={() => navigate('/auth')}
+            className="text-base font-semibold bg-green-900 text-white px-4 py-2 rounded-full hover:bg-green-800 transition-colors"
+          >
+            로그인 / 회원가입
+          </button>
         )}
       </div>
     </nav>

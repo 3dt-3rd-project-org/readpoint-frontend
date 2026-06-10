@@ -7,6 +7,9 @@ function Callback() {
   const [searchParams] = useSearchParams()
 
   useEffect(() => {
+    // strict mode에서 useEffect가 두번 실행되어 api가 중복 호출되는 것을 막음
+    let isMounted = true
+
     // 1. 구글이 준 code 꺼내기
     const code = searchParams.get('code')
 
@@ -17,25 +20,35 @@ function Callback() {
     }
 
     // 2. 구글로 떠나기 전 로그인 타입 꺼내기
-    const loginType = localStorage.getItem(('loginType'))
+    const loginType = localStorage.getItem('loginType')
 
     //3. 관리자라면 adminLogin, 일반 유저면 userLogin 함수 선택
-    const loginFn = loginType === 'admin' ? admin : userLogin
+    const loginFn = loginType === 'admin' ? adminLogin : userLogin
 
     // 4. code 넣어서 백앤드로 보내기
     loginFn(code)
       .then(data => {
+        if (!isMounted) return
+
         if (data.token) {
-          setToken(data.token.replace('Bearer ', ''))
-          navigate('/library')
+          const cleanToken = data.token.replace('Bearer ', '')
+          setToken(cleanToken)
+          localStorage.setItem('accessToken', cleanToken)
+          
+          const targetPath = loginType === 'admin' ? '/admin' : '/library'
+          navigate(targetPath, { replace: true })
         } else {
           navigate('/auth')
           }
         })
         .catch(err => {
+          if (!isMounted) return
           console.error('로그인 실패:', err)
           navigate('/auth')
         })
+      return () => {
+        isMounted = false
+      }
   }, [searchParams, navigate])
 
   return (

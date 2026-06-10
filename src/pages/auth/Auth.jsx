@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 function Auth() {
-  const [tab, setTab] = useState('login'); // 'login' | 'register'
+  const [tab, setTab] = useState('login'); // 'login' | 'register' | 'admin'
   const [modal, setModal] = useState(null); // null | 'terms' | 'privacy'
 
   const handleGoogleAuth = () => {
@@ -19,9 +19,9 @@ function Auth() {
       `&prompt=select_account`; // 무조건 계정 선택창 띄우기
 
     // 주의: 현재 tab 상태는 'login' 또는 'register'만 가능하므로 이 조건은 항상 'user'가 됩니다.
-    localStorage.setItem('loginType', tab === 'admin' ? 'admin' : 'user');
-    window.location.href = googleAuthUrl;
-  };
+    localStorage.setItem('loginType', tab === 'admin' ? 'admin' : 'user')
+    window.location.href = googleAuthUrl
+  }
 
   return (
     <>
@@ -86,13 +86,19 @@ function Auth() {
               >
                 회원가입
               </button>
-            </div>
+              <button
+                onClick={() => setTab('admin')}
+                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
+                tab === 'admin' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`} > 관리자 </button></div>
 
             {/* 설명 텍스트 */}
             <p className="text-center text-sm text-gray-500 mb-6">
               {tab === 'login'
                 ? 'Google 계정으로 간편하게 로그인하세요'
-                : 'Google 계정으로 간편하게 시작하세요'}
+                : tab === 'register'
+                ? 'Google 계정으로 간편하게 시작하세요'
+                : '관리자 계정으로 로그인하세요'}
             </p>
 
             {/* Google 로그인 버튼 */}

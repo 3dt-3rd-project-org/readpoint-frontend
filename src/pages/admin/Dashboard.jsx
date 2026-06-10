@@ -2,7 +2,12 @@ import { useState, useRef, useEffect } from 'react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
 import { uploadBook, getAdminBooks } from '../../api'
 
-
+const MOCK_STATS = {
+  totalRuns: 24,
+  successRate: 87.5,
+  avgTime: '4분 32초',
+  recentErrors: 3,
+}
 
 const MOCK_BOOKS = [
   { id: 1, title: '데미안',  author: '헤르만 헤세', status: 'done' },

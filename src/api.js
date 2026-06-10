@@ -57,7 +57,7 @@ export const uploadBook = async (file) => {
 }
 
 // 관리자 책 목록
-export const getAdminBooks = () => authFetch('/admin/books')
+export const getAdminBooks = () => authFetch('/adm/books')
 
 // 책 삭제
 export const deleteBook = (bookId) => authFetch(`/adm/books/${bookId}`, { method: 'DELETE'})
