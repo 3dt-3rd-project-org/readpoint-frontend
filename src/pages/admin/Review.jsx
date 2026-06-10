@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { getAdminBooks } from '../../api'
 
 const MOCK_CHARACTERS = [
   { id: 1, name: '싱클레어', role: '화자/주인공', chapter: '제1장', desc: '내면 성장을 겪는 주인공', isDup: false },
@@ -8,15 +11,10 @@ const MOCK_CHARACTERS = [
   { id: 5, name: '에바 부인', role: '정신적 어머니', chapter: '제7장', desc: '데미안의 어머니', isDup: false },
 ]
 
-const BOOKS = [
-  { id: 1, title: '데미안' },
-  { id: 2, title: '상록수' },
-  { id: 3, title: '무영탑' },
-]
-
 const TABS = ['인물', '관계', '사건']
 
 function Review() {
+  const [books, setBooks] = useState([])  
   const [selectedBook, setSelectedBook] = useState(null)
   const [activeTab, setActiveTab] = useState('인물')
   const [characters, setCharacters] = useState(MOCK_CHARACTERS)
@@ -33,14 +31,16 @@ function Review() {
     setEditingId(null)
   }
 
-  const handleDelete = (id) => {
-    setCharacters(prev => prev.filter(c => c.id !== id))
-  }
-
   const handleMerge = (id) => {
     // 중복 인물 병합 - 일단 삭제로 처리
     setCharacters(prev => prev.filter(c => c.id !== id))
   }
+
+  useEffect(() => {
+      getAdminBooks()
+        .then(data => setBooks(data.books || []))
+        .catch(err => console.error(err))
+    }, [])
 
   if (!selectedBook) {
     return (
@@ -48,15 +48,21 @@ function Review() {
         <h1 className="text-xl font-bold text-gray-900 mb-2">데이터 검수</h1>
         <p className="text-gray-400 text-sm mb-8">책을 선택해서 추출된 데이터를 검수하세요</p>
         <div className="flex gap-6">
-          {BOOKS.map(book => (
+          {books.map(book => (   // API에서 받아온 책 목록으로 렌더링
             <div
-              key={book.id}
+              key={book.books_id}
               onClick={() => setSelectedBook(book)}
-              className="w-40 h-52 bg-green-900 rounded-xl flex items-end p-4 cursor-pointer hover:bg-green-800 transition-colors"
-            >
-              <p className="text-white font-bold text-sm">{book.title}</p>
-            </div>
-          ))}
+              className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
+              style={{
+                    backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
+                    backgroundColor: '#1A3C2E',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                    }}
+              >
+                <p className="text-white font-bold text-sm p-4">{book.title}</p>
+              </div>
+        ))}
         </div>
       </div>
     )
