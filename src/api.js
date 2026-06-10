@@ -63,7 +63,18 @@ export const getAdminBooks = () => authFetch('/adm/books')
 export const deleteBook = (bookId) => authFetch(`/adm/books/${bookId}`, { method: 'DELETE'})
 
 // 책 분석 실행
-export const analyzeBook = (bookId) => authFetch(`/adm/books/${bookId}/analyze`)
+export const analyzeBook = (bookId) => authFetch(`/adm/books/${bookId}/analyze`, {
+  method: 'POST'
+})
+
+// 요약 파이프라인 실행
+export const summarizeBook = (bookId) => authFetch(`/adm/books/${bookId}/summary`, { method: 'POST' })
+
+// 1차 검수 승인
+export const approveAnalysis = (bookId) => authFetch(`/adm/books/${bookId}/approve-analysis`, { method: 'POST' })
+
+// 2차 검수 승인
+export const approveSummary = (bookId) => authFetch(`/adm/books/${bookId}/approve-summary`, { method: 'POST' })
 
 // 책 수정
 export const updateBook = (bookId, data) => authFetch(`/adm/books/${bookId}`, {
