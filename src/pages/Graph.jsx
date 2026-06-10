@@ -7,37 +7,63 @@ function Graph() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedNode, setSelectedNode] = useState(null)
   const [books, setBooks] = useState([])
-  const [currentChapter, setCurrentChapter] = useState(100) // 챕터 수 100으로 고정
   const [bookTitle, setBookTitle] = useState('')
   const cyRef = useRef(null)
   const cyInstance = useRef(null)
-  const [maxChapter, setMaxChapter] = useState(10)
   const bookId = searchParams.get('bookId')
 
-  // 책 목록 가져오기
+  const [currentChapter, setCurrentChapter] = useState(1)
+  const [maxChapter, setMaxChapter] = useState(8)
+  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [graphNodes, setGraphNodes] = useState([])
+
+  const [eventsByChapter] = useState({
+    1: [
+      { event_id: 1, event_order: 1, short_title: '밝은 세계와 어두운 세계', start_paragraph_id: 1 },
+      { event_id: 2, event_order: 2, short_title: '크로머와의 만남', start_paragraph_id: 10 },
+      { event_id: 3, event_order: 3, short_title: '거짓말과 협박', start_paragraph_id: 20 },
+    ],
+    2: [
+      { event_id: 4, event_order: 1, short_title: '데미안의 등장', start_paragraph_id: 30 },
+      { event_id: 5, event_order: 2, short_title: '카인 이야기', start_paragraph_id: 40 },
+    ],
+  })
+
+  const currentEvents = eventsByChapter[currentChapter] || []
+  const filteredEvents = currentEvents.filter(ev =>
+    ev.short_title.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   useEffect(() => {
     getBooks().then(data => setBooks(data.books || []))
   }, [])
 
-  // 책 선택 시 챕터 수 업데이트
   useEffect(() => {
     if (!bookId) return
     const selectedBook = books.find(b => String(b.books_id) === String(bookId))
     if (selectedBook) {
       setBookTitle(selectedBook.title)
-      setMaxChapter(selectedBook.chapter_count || 10) //기본 값 10
+      setMaxChapter(selectedBook.chapter_count || 8)
     }
   }, [bookId, books])
 
-  // 관계도 데이터 가져오기
+  useEffect(() => {
+    setSelectedEvent(null)
+    setSearchTerm('')
+  }, [currentChapter])
+
   useEffect(() => {
     if (!bookId || !cyRef.current) return
 
-    const selectedBook = books.find(b => String(b.books_id) === String(bookId))
-    if (selectedBook) setBookTitle(selectedBook.title)
+    let cancelled = false
+    const p = selectedEvent?.start_paragraph_id || 1
 
-    getBookRelations(bookId, currentChapter)
+    getBookRelations(bookId, currentChapter, p)
       .then(data => {
+        if (cancelled) return
+        if (!cyRef.current) return
+
         if (cyInstance.current) cyInstance.current.destroy()
 
         const nodes = (data.nodes || []).map(n => ({
@@ -80,10 +106,7 @@ function Graph() {
                 'text-background-padding': '2px',
               }
             },
-            {
-              selector: 'node:selected', // 마우스로 클릭 시 
-              style: { 'background-color': '#4CAF7D' }
-            }
+            { selector: 'node:selected', style: { 'background-color': '#4CAF7D' } }
           ],
           layout: { name: 'cose', padding: 50 }
         })
@@ -98,9 +121,24 @@ function Graph() {
         })
 
         cyInstance.current = cy
+        setGraphNodes(cy.nodes().map(n => ({
+          id: n.id(),
+          name: n.data('label'),
+          role: n.data('role')
+        })))
       })
       .catch(err => console.error(err))
-  }, [bookId, currentChapter, books])
+
+    return () => {
+      cancelled = true
+      if (cyInstance.current) {
+        cyInstance.current.removeAllListeners()
+        cyInstance.current.destroy()
+        cyInstance.current = null
+      }
+      setGraphNodes([])
+    }
+  }, [bookId, currentChapter, selectedEvent, books])
 
   // 책 선택 화면
   if (!bookId) {
@@ -136,50 +174,136 @@ function Graph() {
 
   // 관계도 화면
   return (
-    <div className="flex h-[calc(100vh-80px)]">
-      <div className="flex-1 flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-4">
-          <button
-            onClick={() => { setSearchParams({}); setSelectedNode(null) }}
-            className="text-sm text-green-800 font-semibold hover:text-green-600"
-          >
-            ← 책 목록
-          </button>
-          <span className="text-sm text-gray-900 font-bold">{bookTitle} — 인물 관계도</span>
-          {/* 진도 슬라이더 */}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-gray-400">진도</span>
-            <input
-              type="range"
-              min={1}
-              max={maxChapter}
+    <div className="flex flex-col h-[calc(100vh-80px)]">
+
+      {/* 상단 컨트롤 */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 shrink-0">
+        <div className="flex gap-6 h-40">
+
+          {/* 챕터 선택 */}
+          <div className="w-48 shrink-0 flex flex-col">
+            <button
+              onClick={() => { setSearchParams({}); setSelectedNode(null) }}
+              className="text-sm text-green-800 font-semibold hover:text-green-600 mb-1 self-start"
+            >
+              ← 책 목록
+            </button>
+            <span className="text-sm font-bold text-gray-800 mb-3 truncate">{bookTitle}</span>
+            <label className="text-xs font-semibold text-gray-500 mb-1">챕터 선택</label>
+            <select
               value={currentChapter}
               onChange={(e) => setCurrentChapter(Number(e.target.value))}
-              className="w-32 accent-green-700"
-            />
-            <span className="text-xs text-green-900 font-semibold">{currentChapter}</span>
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-800 outline-none focus:border-green-800 focus:ring-1 focus:ring-green-800 cursor-pointer"
+            >
+              {Array.from({ length: maxChapter }, (_, i) => i + 1).map(ch => (
+                <option key={ch} value={ch}>제 {ch} 장</option>
+              ))}
+            </select>
           </div>
+
+          {/* 사건 검색 + 리스트 */}
+          <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-gray-50 shadow-inner">
+            <div className="p-2 border-b border-gray-200 bg-white">
+              <input
+                type="text"
+                placeholder="어떤 사건을 찾으시나요? (예: 만남, 협박)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md outline-none focus:border-green-800 transition-colors"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-1">
+              {filteredEvents.length > 0 ? (
+                <ul className="space-y-1">
+                  {filteredEvents.map(ev => (
+                    <li
+                      key={ev.event_id}
+                      onClick={() => setSelectedEvent(selectedEvent?.event_id === ev.event_id ? null : ev)}
+                      className={`px-3 py-2 text-sm rounded-md cursor-pointer transition-colors flex items-center gap-3
+                        ${selectedEvent?.event_id === ev.event_id
+                          ? 'bg-green-800 text-white font-semibold shadow-sm'
+                          : 'text-gray-700 hover:bg-green-100'
+                        }`}
+                    >
+                      <span className={`${selectedEvent?.event_id === ev.event_id ? 'text-green-300' : 'text-gray-400'} text-xs font-mono w-5`}>
+                        {ev.event_order}.
+                      </span>
+                      <span>{ev.short_title}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                  검색 결과가 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 선택된 사건 상태창 */}
+          <div className="w-64 shrink-0 bg-green-50/50 border border-green-100 rounded-lg p-4 flex flex-col justify-center items-center text-center">
+            {selectedEvent ? (
+              <>
+                <span className="text-xs font-bold text-green-700 mb-2 px-2 py-1 bg-green-100 rounded-full">
+                  {currentChapter}장 {selectedEvent.event_order}번째 사건
+                </span>
+                <h3 className="text-sm font-bold text-gray-900 line-clamp-2">{selectedEvent.short_title}</h3>
+              </>
+            ) : (
+              <p className="text-sm text-green-800/60 leading-relaxed">
+                좌측 목록에서 탐색할<br/>사건을 선택해 주세요.
+              </p>
+            )}
+          </div>
+
         </div>
-        <div className="flex-1 bg-gray-50" ref={cyRef} />
       </div>
 
-      {/* 인물 정보 패널 */}
-      <div className="w-80 border-l border-gray-200 p-8 bg-white">
-        <p className="text-sm text-gray-400 font-semibold mb-6">인물 정보</p>
-        {selectedNode ? (
-          <div>
-            <div className="w-16 h-16 bg-green-900 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
-              {selectedNode.name?.[0] || selectedNode.id?.[0]}
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">{selectedNode.name || selectedNode.id}</h2>
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs text-gray-400 mb-1">역할</p>
-              <p className="text-sm text-gray-700">{selectedNode.role}</p>
-            </div>
+      {/* 관계도 + 인물 패널 */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 bg-gray-50" ref={cyRef} />
+
+        {/* 인물 정보 패널 */}
+        <div className="w-72 border-l border-gray-200 bg-white overflow-y-auto z-10">
+          <div className="p-6">
+            <p className="text-sm text-gray-400 font-semibold mb-4">인물 정보</p>
+            {selectedNode ? (
+              <div>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="text-xs text-green-700 font-semibold mb-4 hover:text-green-500 block"
+                >
+                  ← 전체 인물
+                </button>
+                <div className="w-16 h-16 bg-green-900 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4 shadow-md">
+                  {selectedNode.name?.[0] || selectedNode.id?.[0]}
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">{selectedNode.name || selectedNode.id}</h2>
+                <div className="border-t border-gray-100 pt-4 space-y-4">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">역할</p>
+                    <p className="text-sm text-gray-700">{selectedNode.role_in_event || '정보 없음'}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {graphNodes.map(char => (
+                  <div
+                    key={char.id}
+                    onClick={() => setSelectedNode(char)}
+                    className="flex flex-col items-center cursor-pointer hover:opacity-70 transition-opacity"
+                  >
+                    <div className="w-10 h-10 bg-green-900 rounded-full flex items-center justify-center text-white text-sm font-bold mb-1 shadow-sm">
+                      {char.name?.[0] || char.id?.[0]}
+                    </div>
+                    <span className="text-xs text-gray-600 text-center truncate w-full">{char.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="text-gray-400 text-sm">인물을 클릭하면 정보가 표시됩니다</p>
-        )}
+        </div>
       </div>
     </div>
   )

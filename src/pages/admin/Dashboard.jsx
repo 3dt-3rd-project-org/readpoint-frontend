@@ -82,7 +82,7 @@ function Dashboard() {
   }
 
   // ==========================================
-  // ⚙️ 여기서부터 진짜 작동하는 핵심 핸들러 함수들
+  // ⚙️ 관리자 핵심 제어 핸들러 함수들
   // ==========================================
 
   // 1. [재시도] 핸들러
@@ -110,7 +110,7 @@ function Dashboard() {
     }
   }
 
-  // 2. [1차 분석 시작] 핸들러 (★에러 범인 등장! 여기에 완벽하게 선언해 두었습니다)
+  // 2. [1차 분석 시작] 핸들러
   const handleAnalyze = async (bookId) => {
     setBooks(prev => prev.map(b => {
       const currentId = b.books_id || b.id
@@ -200,7 +200,9 @@ function Dashboard() {
     }
   }
 
-  // 웹 소켓 연결 및 실시간 데이터 수신
+  // ==========================================
+  // 📡 실시간 웹소켓 이벤트 감지 및 처리 구역
+  // ==========================================
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
 
@@ -211,36 +213,42 @@ function Dashboard() {
 
     let isActive = true
 
-    connectWebSocket((message) => {
+    connectWebSocket((payload) => {
       if (!isActive) return 
 
-      console.log('웹소켓 메시지 수신:', message)
+      console.log('★ 실시간 웹소켓 배달 원본:', payload)
 
-      const incomingStatus = (message.event || message.status || '').toUpperCase()
+      // 1. 대소문자 꼬임 방지를 위한 상단 변환
+      const incomingStatus = (payload.status || '').toUpperCase()
 
-      // 1. 상태별로 알림창에 띄울 깔끔한 기본 한글 문구 정의
+      // 2. 알림창 한글 맵핑 템플릿
       const DEFAULT_MESSAGES = {
         'ANALYZING_FINISHED': '🎉 1차 본문 분석 파이프라인이 완료되었습니다! (검수 필요)',
         'SUMMARIZING_COMPLETE': '🎉 요약 및 관계도 생성 파이프라인이 완료되었습니다! (최종 검수 필요)',
         'ANALYZING_ERROR': '❌ 1차 본문 분석 중 오류가 발생했습니다.',
-        'SUMMARY_ERROR': '❌ 요약 생성 중 오류가 발생했습니다.'
+        'SUMMARY_ERROR': '❌ 요약 생성 중 오류가 발생했습니다.',
+        'METADATA_COMPLETE': '📂 새 도서의 메타데이터 파싱 및 등록이 완료되었습니다.',
+        'METADATA_ERROR': '❌ 도서 메타데이터 파싱 중 오류가 발생했습니다.'
       }
 
-      // 2. 텍스트 우선순위 결정: 백엔드가 준 메세지 -> 에러 원인 메세지 -> 기본 매핑 문구 -> 정 없으면 기본 기계 스펙
-      const logText = message.message 
-        || message.error // 👈 ADF가 보낸 진짜 에러 메시지("@{activity(...).error.message}")를 여기서 낚아챕니다!
+      // 3. 문구 우선순위 판단 (ADF 에러 알맹이 -> 백엔드 메세지 -> 기본 한글 문구 -> 기계 디폴트)
+      const logText = payload.error 
+        || payload.message 
         || DEFAULT_MESSAGES[incomingStatus] 
-        || `${incomingStatus} — Book ID: ${message.book_id || message.book?.books_id}`
+        || `${incomingStatus} — Book ID: ${payload.book_id || '알 수 없음'}`
 
+      // 4. 에러 및 진행률 아이콘 맵핑 버그 완전 박멸
       const newLog = {
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
         type: incomingStatus.includes('ERROR') ? 'error'
-              : incomingStatus.status?.includes('PROGRESS') ? 'running'
+              : incomingStatus.includes('PROGRESS') ? 'running'
               : 'success',
         text: logText
       }
+      
       setLogs(prev => [newLog, ...prev]) 
       
+      // 5. 실시간 상태 전환 유도
       const refreshEvents = [
         'ANALYZING_FINISHED',
         'ANALYZING_ERROR',   
@@ -255,7 +263,10 @@ function Dashboard() {
       }
     })
 
-    return () => disconnectWebSocket()
+    return () => {
+      isActive = false
+      disconnectWebSocket()
+    }
   }, [])
 
   return (
