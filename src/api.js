@@ -26,16 +26,6 @@ const authFetch = async (url, options = {}) => {
 }
 
 // ── Auth ──────────────────────────────────────
-// 구글 로그인 URL 가져오기 (관리자)
-export const getAdminGoogleLoginUrl = () => {
-  window.location.href = `${BASE_URL}/auth/admin/google`
-}
-
-// 구글 로그인 URL 가져오기 (사용자)
-export const getUserGoogleLoginUrl = () => {
-  window.location.href = `${BASE_URL}/auth/user/google`
-}
-
 // 사용자 로그인 (code -> JWT 토큰)
 export const userLogin = (code) => authFetch('/auth/user/login', {
   method: 'POST',
