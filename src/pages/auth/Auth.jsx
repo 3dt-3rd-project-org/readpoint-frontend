@@ -1,9 +1,19 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 function Auth() {
-  const [tab, setTab] = useState('login'); // 'login' | 'register' | 'admin'
-  const [modal, setModal] = useState(null); // null | 'terms' | 'privacy'
+  const [tab, setTab] = useState('login');
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken')
+    const role = localStorage.getItem('role')
+    if (token) {
+      navigate(role === 'ADMIN' ? '/admin' : '/library', { replace: true })
+    }
+  }, [])
+  const [modal, setModal] = useState(null);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false)
 
   const handleGoogleAuth = () => {
     const GOOGLE_CLIENT_ID = '898813475333-g6vpbm9jgrvm4v8ec6525c73rcd52toq.apps.googleusercontent.com';
@@ -14,28 +24,26 @@ function Auth() {
       `response_type=code` +
       `&client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
       `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-      `&scope=openid%20email%20profile` + // 구글에게 이메일, 프로필 정보 요청
-      `&access_type=offline` + // 리프레시 토큰 요청
-      `&prompt=select_account`; // 무조건 계정 선택창 띄우기
+      `&scope=openid%20email%20profile` +
+      `&access_type=offline` +
+      `&prompt=select_account`;
 
-    // 주의: 현재 tab 상태는 'login' 또는 'register'만 가능하므로 이 조건은 항상 'user'가 됩니다.
     localStorage.setItem('loginType', tab === 'admin' ? 'admin' : 'user')
     window.location.href = googleAuthUrl
   }
 
   return (
     <>
-      {/* 모달 배경 및 컨텐츠 */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
             <h2 className="text-lg font-bold text-gray-900 mb-4">
               {modal === 'terms' ? '이용약관' : '개인정보처리방침'}
             </h2>
-            <p className="text-sm text-gray-600 leading-relaxed">
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
               {modal === 'terms'
-                ? 'Readpoint 서비스를 이용해주셔서 감사합니다. 본 약관은 서비스 준비 중이므로 임시 적용됩니다.'
-                : '수집하는 항목(이메일, 프로필 사진)은 구글 로그인 연동 및 서비스 제공 목적으로만 사용됩니다.'}
+                ? `1. 서비스 이용\nReadpoint는 독서 기록 및 인물 관계도 서비스를 제공합니다.\n\n2. 계정\nGoogle 계정으로 가입하며, 부정 이용 시 서비스 이용이 제한될 수 있습니다.\n\n3. 금지 행위\n서비스를 악용하거나 타인에게 피해를 주는 행위를 금지합니다.\n\n4. 서비스 변경\n서비스 내용은 사전 고지 없이 변경될 수 있습니다.`
+                : `Readpoint는 서비스 제공을 위해 아래와 같이 최소한의 개인정보를 수집합니다.\n\n수집 항목: 이메일 주소, 닉네임 (Google 계정 기반)\n수집 목적: 회원 식별 및 서비스 이용\n보유 기간: 회원 탈퇴 시까지\n\n수집된 정보는 제3자에게 제공되지 않습니다.`}
             </p>
             <button
               onClick={() => setModal(null)}
@@ -47,11 +55,9 @@ function Auth() {
         </div>
       )}
 
-      {/* 메인 레이아웃 컨테이너 */}
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
-          
-          {/* 로고 */}
+
           <div className="text-center mb-8">
             <Link to="/" className="text-3xl font-bold text-green-900">
               📖 Readpoint
@@ -61,38 +67,36 @@ function Auth() {
             </p>
           </div>
 
-          {/* 카드 폼 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-10">
-            
-            {/* 탭 토글 버튼 */}
+
+            {/* 탭 */}
             <div className="flex bg-gray-100 rounded-full p-1 mb-8">
               <button
-                onClick={() => setTab('login')}
+                onClick={() => { setTab('login'); setPrivacyAgreed(false) }}
                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  tab === 'login'
-                    ? 'bg-white text-green-900 shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                  tab === 'login' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 로그인
               </button>
               <button
-                onClick={() => setTab('register')}
+                onClick={() => { setTab('register'); setPrivacyAgreed(false) }}
                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  tab === 'register'
-                    ? 'bg-white text-green-900 shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                  tab === 'register' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 회원가입
               </button>
               <button
-                onClick={() => setTab('admin')}
+                onClick={() => { setTab('admin'); setPrivacyAgreed(false) }}
                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                tab === 'admin' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                }`} > 관리자 </button></div>
+                  tab === 'admin' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                관리자
+              </button>
+            </div>
 
-            {/* 설명 텍스트 */}
             <p className="text-center text-sm text-gray-500 mb-6">
               {tab === 'login'
                 ? 'Google 계정으로 간편하게 로그인하세요'
@@ -101,10 +105,32 @@ function Auth() {
                 : '관리자 계정으로 로그인하세요'}
             </p>
 
-            {/* Google 로그인 버튼 */}
+            {/* 개인정보 동의 (회원가입 탭만) */}
+            {tab === 'register' && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-4 text-xs text-gray-600 leading-relaxed border border-gray-200">
+                <p className="mb-3">
+                  Readpoint는 서비스 제공을 위해 아래와 같이 최소한의 개인정보를 수집합니다.
+                </p>
+                <p className="mb-1"><span className="font-semibold">수집 항목:</span> 이메일 주소, 닉네임 (Google 계정 기반)</p>
+                <p className="mb-1"><span className="font-semibold">수집 목적:</span> 회원 식별 및 서비스 이용</p>
+                <p className="mb-3"><span className="font-semibold">보유 기간:</span> 회원 탈퇴 시까지</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={privacyAgreed}
+                    onChange={(e) => setPrivacyAgreed(e.target.checked)}
+                    className="accent-green-800 w-4 h-4"
+                  />
+                  <span className="font-semibold text-gray-700">위 개인정보 수집 및 이용에 동의합니다. (필수)</span>
+                </label>
+              </div>
+            )}
+
+            {/* Google 버튼 */}
             <button
               onClick={handleGoogleAuth}
-              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm"
+              disabled={tab === 'register' && !privacyAgreed}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -113,45 +139,44 @@ function Auth() {
                 <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
               </svg>
               <span className="text-sm font-semibold text-gray-700">
-                Google로 {tab === 'login' ? '로그인' : '회원가입'}
+                Google로 {tab === 'login' ? '로그인' : tab === 'register' ? '회원가입' : '관리자 로그인'}
               </span>
             </button>
 
-            {/* 하단 탭 전환 안내 */}
             <p className="mt-6 text-center text-xs text-gray-400">
               {tab === 'login' ? (
                 <>
                   계정이 없으신가요?{' '}
-                  <button onClick={() => setTab('register')} className="text-green-900 font-semibold hover:underline">
+                  <button onClick={() => { setTab('register'); setPrivacyAgreed(false) }} className="text-green-900 font-semibold hover:underline">
                     회원가입
                   </button>
                 </>
-              ) : (
+              ) : tab === 'register' ? (
                 <>
                   이미 계정이 있으신가요?{' '}
-                  <button onClick={() => setTab('login')} className="text-green-900 font-semibold hover:underline">
+                  <button onClick={() => { setTab('login'); setPrivacyAgreed(false) }} className="text-green-900 font-semibold hover:underline">
                     로그인
                   </button>
                 </>
-              )}
+              ) : null}
             </p>
           </div>
-
-          {/* 이용약관 및 푸터 */}
-          <p className="mt-4 text-center text-xs text-gray-400">
-            계속 진행하면{' '}
-            <span 
-              onClick={() => setModal('terms')}
-              className="underline cursor-pointer hover:text-gray-600"
-            >이용약관</span>
-            {' '}및{' '}
-            <span 
-              onClick={() => setModal('privacy')}
-              className="underline cursor-pointer hover:text-gray-600"
-            >개인정보처리방침</span>
-            에 동의하는 것으로 간주합니다
-          </p>
-
+          
+          {tab !== 'register' && (
+            <p className="mt-4 text-center text-xs text-gray-400">
+              계속 진행하면{' '}
+              <span
+                onClick={() => setModal('terms')}
+                className="underline cursor-pointer hover:text-gray-600"
+              >이용약관</span>
+              {' '}및{' '}
+              <span
+                onClick={() => setModal('privacy')}
+                className="underline cursor-pointer hover:text-gray-600"
+              >개인정보처리방침</span>
+              에 동의하는 것으로 간주합니다
+            </p>
+          )}
         </div>
       </div>
     </>
