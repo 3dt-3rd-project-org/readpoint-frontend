@@ -1,10 +1,14 @@
 import { useEffect } from 'react'
 import {useNavigate, useSearchParams } from 'react-router-dom'
 import { userLogin, adminLogin, setToken } from '../../api'
+import { useUser } from '../../context/UserContext'
+
 
 function Callback() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { setUser } = useUser()
+
 
   useEffect(() => {
     // strict mode에서 useEffect가 두번 실행되어 api가 중복 호출되는 것을 막음
@@ -34,7 +38,7 @@ function Callback() {
           const cleanToken = data.token.replace('Bearer ', '')
           setToken(cleanToken)
           localStorage.setItem('accessToken', cleanToken)
-          localStorage.setItem('role', data.user.role) // role도 저장
+          setUser(data.user) 
           const targetPath = loginType === 'admin' ? '/admin' : '/library'
           navigate(targetPath, { replace: true })
         } else {

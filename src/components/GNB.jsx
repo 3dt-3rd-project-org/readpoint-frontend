@@ -1,40 +1,36 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useEffect, useRef } from 'react' // useRef 추가
-
+import { useState, useEffect, useRef } from 'react' 
+import { useUser } from '../context/UserContext'
 
 function GNB() {
   const location = useLocation()
   const navigate = useNavigate()
-  const dropdownRef = useRef(null) // 드롭다운 외부 클릭 감지용
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('accessToken'))
-  const [role, setRole] = useState(localStorage.getItem('role')) 
+  const dropdownRef = useRef(null) 
 
+  const { user, setUser } = useUser() // 전역 user 상태 가져오기
+
+  // 💡 [핵심 수정] 혼자 로컬스토리지 보던 것을 전역 user 가 있냐 없냐(!!user)로 기준을 바꿉니다.
+  const isLoggedIn = !!user 
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
-  // 더미 데이터 (추후 API나 전역 상태로 대체)
-  const user = {
-    name: '박기원',
-    email: 'user@gmail.com'
-  }
-
-  // 1. 다른 탭에서 로그인/로그아웃 시 상태 동기화
+  // 1. 다른 탭에서 로그인/로그아웃 시 상태 동기화 (기존 유지)
   useEffect(() => {
     const checkLogin = () => {
-      setIsLoggedIn(!!localStorage.getItem('accessToken'))
-      setRole(localStorage.getItem('role'))
+      // 로컬스토리지 찌꺼기가 만약 지워지면 전역 상태도 비워줌
+      if (!localStorage.getItem('accessToken')) {
+        setUser(null)
+      }
     }
     window.addEventListener('storage', checkLogin)
     return () => window.removeEventListener('storage', checkLogin)
-  }, [])
+  }, [setUser])
 
-  // 2. 페이지(location) 변경 시마다 로그인 확인 + 드롭다운 닫기
+  // 2. 페이지(location) 변경 시마다 드롭다운 닫기 (기존 유지)
   useEffect(() => {
-    setIsLoggedIn(!!localStorage.getItem('accessToken'))
-    setRole(localStorage.getItem('role'))
-    setDropdownOpen(false) // 페이지 이동하면 드롭다운은 닫아주는 게 자연스러워요.
+    setDropdownOpen(false) 
   }, [location])
 
-  // 3. 드롭다운 바깥 영역 클릭 시 자동으로 드롭다운 닫기
+  // 3. 드롭다운 바깥 영역 클릭 시 자동으로 드롭다운 닫기 (기존 유지)
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -51,10 +47,8 @@ function GNB() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('loginType')
-    localStorage.removeItem('role')
-    setIsLoggedIn(false)
+    setUser(null) // 💡 [수정] 전역 상태를 null로 만들어 세션스토리지도 같이 비워지게 함
     setDropdownOpen(false)
-    setRole(null)
     navigate('/')
   }
 
@@ -70,11 +64,11 @@ function GNB() {
         {[
           { path: '/library', label: '서재' },
           { path: '/graph', label: '관계도' },
-          ...(role === 'ADMIN' ? [{ path: '/admin', label: '관리' }] : []), 
+          ...(user?.role === 'ADMIN' ? [{ path: '/admin', label: '관리' }] : []), 
         ].map(({ path, label }) => (
           <Link
             key={path}
-            to={isLoggedIn ? path : '/auth'}
+            to={isLoggedIn ? path : '/auth'} // 💡 이제 isLoggedIn이 정확히 false가 되므로 /auth로 잘 이동합니다!
             className={`text-base font-medium px-4 py-2 rounded-full transition-colors ${
               location.pathname === path
                 ? 'bg-green-900 text-white'
@@ -95,9 +89,9 @@ function GNB() {
               className="flex items-center gap-2 text-base font-medium text-gray-700 hover:text-green-900 transition-colors"
             >
               <div className="w-8 h-8 bg-green-900 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                {user.name[0]}
+                {user?.nickname?.[0] || user?.name?.[0] || '?'}
               </div>
-              {user.name}
+              {user?.nickname || user?.name}
               <span className="text-xs text-gray-400">▼</span>
             </button>
 
@@ -105,8 +99,8 @@ function GNB() {
             {dropdownOpen && (
               <div className="absolute right-0 top-12 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-400">{user.email}</p>
+                  <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+                  <p className="text-xs text-gray-400">{user?.email}</p>
                 </div>
                 <div className="py-1">
                   <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
