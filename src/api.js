@@ -72,6 +72,20 @@ export const updateBook = (bookId, data) => authFetch(`/adm/books/${bookId}`, {
   body: JSON.stringify(data)
 })
 
+// 책 검수 인물 목록
+export const getBookCharactersForReview = (bookId) => authFetch(`/adm/books/${bookId}/characters`)
+
+// 책 검수 관계 목록
+export const getBookRelationsForReview = (bookId) => authFetch(`/adm/books/${bookId}/relations`)
+
+// 책 검수 사건 목록
+export const getBookEventsForReview = (bookId) => authFetch(`/adm/books/${bookId}/events`)
+
+export const approveAnalysisForReview = (bookId, data) => authFetch(`/adm/books/${bookId}/approve-analysis`, {
+  method: 'POST',
+  body: JSON.stringify(data)
+})
+
 // ── Reader Books ─────────────────────────────────────
 // 사용자 책 목록
 export const getBooks = () => authFetch('/books')
