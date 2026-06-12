@@ -90,3 +90,7 @@ export const getBookRelations = (bookId, chapter, p = 1) =>
 // 웹소켓 토큰
 export const getWebPubSubToken = () => authFetch('/adm/analyze/token')
 
+
+// ── Application Insights ─────────────────────────────────
+// 인사이트 조회
+export const getInsights = (timespan = 'PT1H') => authFetch(`/insights/insights?timespan=${timespan}`)

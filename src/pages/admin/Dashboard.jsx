@@ -1,22 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { BarChart2, Bell, BookOpen, Upload, CheckCircle, XCircle, Loader } from 'lucide-react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
-import { uploadBook, getAdminBooks, analyzeBook, summarizeBook, approveAnalysis, approveSummary } from '../../api'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-
-const MOCK_INSIGHTS = {
-  totalRequests: 24,
-  failedRequests: 3,
-  avgResponseTime: 272619,
-  successRate: 87.5,
-  requestsOverTime: [
-    { time: '16:00', requests: 2, failed: 0 },
-    { time: '16:15', requests: 5, failed: 1 },
-    { time: '16:30', requests: 8, failed: 0 },
-    { time: '16:45', requests: 4, failed: 2 },
-    { time: '17:00', requests: 5, failed: 0 },
-  ]
-}
+import { uploadBook, getAdminBooks, analyzeBook, summarizeBook, approveAnalysis, approveSummary, getInsights } from '../../api'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts'
 
 const STATUS_MAP = {
   READY:                { label: '📂 분석 전', className: 'text-gray-400' },
@@ -38,6 +24,7 @@ const LOG_ICON = {
 
 function formatMs(ms) {
   if (!ms) return '-'
+  if (ms < 1000) return `${Math.round(ms)}ms`
   const min = Math.floor(ms / 60000)
   const sec = Math.floor((ms % 60000) / 1000)
   return min > 0 ? `${min}분 ${sec}초` : `${sec}초`
@@ -48,8 +35,26 @@ function Dashboard() {
   const [logs, setLogs] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState(null)
-  const [insights, setInsights] = useState(MOCK_INSIGHTS)
+  const [insights, setInsights] = useState({
+    totalRequests: 0,
+    failedRequests: 0,
+    avgResponseTime: 0,
+    successRate: 0,
+    requestsByOperation: []
+  })
   const fileInputRef = useRef(null)
+
+  const [timespan, setTimespan] = useState('PT1H')
+
+  const TIMESPAN_OPTIONS = [
+    { label: '30분', value: 'PT30M' },
+    { label: '1시간', value: 'PT1H' },
+    { label: '6시간', value: 'PT6H' },
+    { label: '12시간', value: 'PT12H' },
+    { label: '1일', value: 'P1D' },
+    { label: '3일', value: 'P3D' },
+    { label: '7일', value: 'P7D' },
+  ]
 
   const fetchBooks = () => {
     getAdminBooks()
@@ -59,9 +64,12 @@ function Dashboard() {
 
   useEffect(() => {
     fetchBooks()
-    // 백엔드 연결 후 교체:
-    // getInsights().then(data => setInsights(data))
-  }, [])
+    getInsights(timespan).then(data => {
+      console.log('insights data:', data)
+      console.log('avgResponseTime:', data.avgResponseTime)
+      setInsights(data)
+    })
+  }, [timespan])
 
   const handleFile = (selectedFile) => {
     if (!selectedFile) return
@@ -223,15 +231,31 @@ function Dashboard() {
     { name: '실패', value: insights.failedRequests },
   ]
 
+
   return (
     <>
       <h1 className="text-xl font-bold text-gray-900 mb-6">파이프라인 현황</h1>
 
       {/* Application Insights */}
       <div className="mb-6">
-        <p className="text-xs text-gray-400 flex items-center gap-1 mb-3">
+        <div className="text-xs text-gray-400 flex items-center gap-1 mb-3">
           <BarChart2 size={14} /> Application Insights
-        </p>
+          <div className="ml-auto flex gap-1">
+            {TIMESPAN_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTimespan(opt.value)}
+                className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
+                  timespan === opt.value
+                    ? 'bg-green-900 text-white'
+                    : 'text-gray-400 hover:text-green-800'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* 카드 4개 */}
         <div className="grid grid-cols-4 gap-4 mb-4">
@@ -256,18 +280,26 @@ function Dashboard() {
         {/* 그래프 2개 */}
         <div className="grid grid-cols-3 gap-4">
           {/* 라인 차트 */}
+          {/* 바 차트 */}
           <div className="col-span-2 bg-white rounded-xl border border-gray-200 px-5 py-4">
-            <p className="text-xs text-gray-400 mb-3">시간대별 요청 수</p>
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={insights.requestsOverTime}>
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="requests" stroke="#1A3C2E" strokeWidth={2} dot={false} name="전체" />
-                <Line type="monotone" dataKey="failed" stroke="#ef4444" strokeWidth={2} dot={false} name="실패" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+            <p className="text-xs text-gray-400 mb-3">함수별 요청 수</p>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={insights.requestsByOperation || []} margin={{ bottom: 60 }}>
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 9 }}
+                    tickFormatter={(value) => value.replace('GET ', '').replace('POST ', '')}
+                    angle={-30} 
+                    textAnchor="end" 
+                    height={60}
+                    interval={0}
+                  />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="requests" fill="#1A3C2E" name="요청 수" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
 
           {/* 도넛 차트 */}
           <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
