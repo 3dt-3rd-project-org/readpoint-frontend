@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { BarChart2, Bell, BookOpen, Upload } from 'lucide-react'
+import { BarChart2, Bell, BookOpen, Upload, CheckCircle, XCircle, Loader } from 'lucide-react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
 import { uploadBook, getAdminBooks, analyzeBook, summarizeBook, approveAnalysis, approveSummary } from '../../api'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
@@ -19,21 +19,21 @@ const MOCK_INSIGHTS = {
 }
 
 const STATUS_MAP = {
-  READY:                { label: '📂 분석 전', className: 'text-blue-500' },
+  READY:                { label: '📂 분석 전', className: 'text-gray-400' },
   ANALYZING:            { label: '⏳ 분석 중', className: 'text-yellow-600' },
   ANALYZING_ERROR:      { label: '❌ 분석 실패', className: 'text-red-500' },
-  ANALYZING_FINISHED:   { label: '🔍 1차 검수 필요', className: 'text-purple-500' },
-  ANALYZING_COMPLETE:   { label: '✅ 1차 검수 완료', className: 'text-green-500' },
+  ANALYZING_FINISHED:   { label: '🔍 1차 검수 필요', className: 'text-gray-500' },
+  ANALYZING_COMPLETE:   { label: '✅ 1차 검수 완료', className: 'text-gray-500' },
   SUMMARIZING:          { label: '⏳ 요약 중', className: 'text-yellow-600' },
   SUMMARY_ERROR:        { label: '❌ 요약 실패', className: 'text-red-500' },
-  SUMMARIZING_COMPLETE: { label: '🔍 최종 검수 필요', className: 'text-purple-500' },
+  SUMMARIZING_COMPLETE: { label: '🔍 최종 검수 필요', className: 'text-gray-500' },
   COMPLETE:             { label: '🌐 업로드 완료', className: 'text-green-600' },
 }
 
 const LOG_ICON = {
-  error: '❌',
-  success: '✅',
-  running: '⏳',
+  error: <XCircle size={16} className="text-red-500 shrink-0" />,
+  success: <CheckCircle size={16} className="text-green-500 shrink-0" />,
+  running: <Loader size={16} className="text-yellow-500 shrink-0" />,
 }
 
 function formatMs(ms) {
@@ -102,7 +102,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
-      text: `🔄 관리자가 재시도를 시작했습니다. (Book ID: ${bookId})`
+      text: `관리자가 재시도를 시작했습니다.`
     }, ...prev])
     try {
       await analyzeBook(bookId)
@@ -121,7 +121,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
-      text: `🚀 관리자가 1차 분석 파이프라인을 시작했습니다. (Book ID: ${bookId})`
+      text: `관리자가 1차 분석 파이프라인을 시작했습니다. (Book ID: ${bookId})`
     }, ...prev])
     try {
       await analyzeBook(bookId)
@@ -136,7 +136,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'success',
-      text: `👍 관리자가 1차 분석 결과를 승인했습니다. (Book ID: ${bookId})`
+      text: `관리자가 1차 분석 결과를 승인했습니다.`
     }, ...prev])
     try {
       await approveAnalysis(bookId)
@@ -155,7 +155,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
-      text: `📝 관리자가 요약 및 관계도 생성 파이프라인을 시작했습니다. (Book ID: ${bookId})`
+      text: `관리자가 요약 및 관계도 생성 파이프라인을 시작했습니다.`
     }, ...prev])
     try {
       await summarizeBook(bookId)
@@ -170,7 +170,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'success',
-      text: `🌐 관리자가 최종 요약을 승인하여 서비스를 배포했습니다! (Book ID: ${bookId})`
+      text: `관리자가 최종 요약을 승인하여 서비스를 배포했습니다!`
     }, ...prev])
     try {
       await approveSummary(bookId)
@@ -191,17 +191,20 @@ function Dashboard() {
       if (!isActive) return
       const incomingStatus = (payload.status || '').toUpperCase()
       const DEFAULT_MESSAGES = {
-        'ANALYZING_FINISHED': '🎉 1차 본문 분석 파이프라인이 완료되었습니다! (검수 필요)',
-        'SUMMARIZING_COMPLETE': '🎉 요약 및 관계도 생성 파이프라인이 완료되었습니다! (최종 검수 필요)',
-        'ANALYZING_ERROR': '❌ 1차 본문 분석 중 오류가 발생했습니다.',
-        'SUMMARY_ERROR': '❌ 요약 생성 중 오류가 발생했습니다.',
-        'METADATA_COMPLETE': '📂 새 도서의 메타데이터 파싱 및 등록이 완료되었습니다.',
-        'METADATA_ERROR': '❌ 도서 메타데이터 파싱 중 오류가 발생했습니다.'
+        'ANALYZING_FINISHED': '1차 본문 분석 파이프라인이 완료되었습니다! (검수 필요)',
+        'SUMMARIZING_COMPLETE': '요약 및 관계도 생성 파이프라인이 완료되었습니다! (최종 검수 필요)',
+        'ANALYZING_ERROR': '1차 본문 분석 중 오류가 발생했습니다.',
+        'SUMMARY_ERROR': '요약 생성 중 오류가 발생했습니다.',
+        'METADATA_COMPLETE': `새 도서의 메타데이터 파싱 및 등록이 완료되었습니다. (Book ID: ${payload.book?.books_id || '알 수 없음'})`,
+        'METADATA_ERROR': '도서 메타데이터 파싱 중 오류가 발생했습니다.'
       }
-      const logText = payload.error || payload.message || DEFAULT_MESSAGES[incomingStatus] || `${incomingStatus} — Book ID: ${payload.book_id || '알 수 없음'}`
+      const logText = payload.error || payload.message || DEFAULT_MESSAGES[incomingStatus] || `${incomingStatus} — Book ID: ${payload.books_id || '알 수 없음'}`
       setLogs(prev => [{
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        type: incomingStatus.includes('ERROR') ? 'error' : incomingStatus.includes('PROGRESS') ? 'running' : 'success',
+        type: incomingStatus.includes('ERROR') ? 'error'
+          : incomingStatus.includes('FINISHED') || incomingStatus.includes('COMPLETE') ? 'success'
+          : (payload.message || '').includes('성공') ? 'success'
+          : 'running',
         text: logText
       }, ...prev])
       if (['ANALYZING_FINISHED', 'ANALYZING_ERROR', 'SUMMARIZING_COMPLETE', 'SUMMARY_ERROR', 'METADATA_COMPLETE', 'METADATA_ERROR'].includes(incomingStatus)) {
@@ -359,7 +362,11 @@ function Dashboard() {
               <div key={i} className="flex items-start gap-4 px-5 py-3.5 text-sm">
                 <span className="text-gray-400 shrink-0 w-10">{log.time}</span>
                 <span className="shrink-0">{LOG_ICON[log.type]}</span>
-                <span className={log.type === 'error' ? 'text-red-500' : 'text-gray-700'}>{log.text}</span>
+                <span className={
+            log.type === 'error' ? 'text-red-500' 
+            : log.type === 'success' ? 'text-green-600'
+            : 'text-gray-700'
+          }>{log.text}</span>
               </div>
             ))
           )}
