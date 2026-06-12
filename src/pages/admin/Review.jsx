@@ -1,119 +1,25 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getAdminBooks } from '../../api'
-
-/* ============================================================
-   API 연동 포인트
-   실제 API 연동 시 각 함수의 주석을 해제하고 목업 블록을 제거하세요
-
-   가정한 엔드포인트:
-     GET  /api/admin/books                        → 책 목록
-     GET  /api/admin/books/:bookId/characters     → 인물 목록
-     GET  /api/admin/books/:bookId/relations      → 관계 목록
-     GET  /api/admin/books/:bookId/events         → 사건 목록
-     PUT  /api/admin/books/:bookId/characters     → 인물 전체 일괄 저장 (검수 완료 시)
-     PUT  /api/admin/books/:bookId/relations      → 관계 전체 일괄 저장
-     PUT  /api/admin/books/:bookId/events         → 사건 전체 일괄 저장
-
-   요청 바디: { characters: [...] } / { relations: [...] } / { events: [...] }
-   응답 스펙:
-     characters: [{ id, name, role, chapter, desc, isDup }]
-     relations:  [{ id, source, target, type, desc }]
-     events:     [{ id, title, chapter, characters, desc }]
-
-   저장 시점:
-     화면에서 수정/삭제/병합 → 로컬 state에만 반영 (API 호출 없음)
-     "검수 완료 →" 버튼 클릭 → 해당 단계 데이터 일괄 API 전송
-============================================================ */
+import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview } from '../../api'
 
 async function fetchCharacters(bookId) {
-  // const res = await fetch(`/api/admin/books/${bookId}/characters`)
-  // if (!res.ok) throw new Error(`서버 오류: ${res.status}`)
-  // const data = await res.json()
-  // return data.characters
-
-  await new Promise(r => setTimeout(r, 500))
-  return [
-    { id: 1, name: '싱클레어',    role: '화자/주인공',   chapter: '제1장', desc: '내면 성장을 겪는 주인공',   isDup: false },
-    { id: 2, name: '데미안',      role: '정신적 스승',   chapter: '제1장', desc: '카인의 표식을 지닌 자',    isDup: false },
-    { id: 3, name: '막스 데미안', role: '정신적 스승',   chapter: '제1장', desc: '싱클레어의 친구',          isDup: true  },
-    { id: 4, name: '베아트리체',  role: '이상화된 여인', chapter: '제4장', desc: '싱클레어가 동경하는 소녀', isDup: false },
-    { id: 5, name: '에바 부인',   role: '정신적 어머니', chapter: '제7장', desc: '데미안의 어머니',          isDup: false },
-  ]
+  await new Promise(r => setTimeout(r, 500));
+  const response = await getBookCharactersForReview(bookId);
+  return response?.characters || [];
 }
 
 async function fetchRelations(bookId) {
-  await new Promise(r => setTimeout(r, 500))
-  return [
-    { 
-      relationship_change_id: 1, 
-      books_id: bookId,
-      source_character_id: '싱클레어', // 추후 DB 연동 시에는 실제 ID나 JOIN된 이름 필드로 대체
-      target_character_id: '데미안', 
-      relation: '정신적 인도자', 
-      change_summary: '카인과 아벨의 새로운 해석을 통해 싱클레어를 성장의 길로 이끄는 스승이자 내면의 동반자',
-      is_core_relation: true // 중요 관계 표시용
-    },
-    { 
-      relationship_change_id: 2, 
-      books_id: bookId,
-      source_character_id: '싱클레어', 
-      target_character_id: '프랭크 크로머', 
-      relation: '적대 및 종속', 
-      change_summary: '거짓 도둑질 자랑으로 미끼를 잡아 싱클레어를 협박하고 착취하며 악몽에 시달리게 한 인물',
-      is_core_relation: false
-    },
-    { 
-      relationship_change_id: 3, 
-      books_id: bookId,
-      source_character_id: '데미안', 
-      target_character_id: '프랭크 크로머', 
-      relation: '문제 해결', 
-      change_summary: '싱클레어의 고통을 알아채고 직접 찾아가 대화함으로써 크로머의 협박과 갈취를 종결시킴',
-      is_core_relation: false
-    }
-  ]
+  await new Promise(r => setTimeout(r, 500));
+  const response = await getBookRelationsForReview(bookId);
+  return response?.relations || []; 
 }
 
 async function fetchEvents(bookId) {
-  await new Promise(r => setTimeout(r, 500))
-  return [
-    {
-      event_id: 101,
-      books_id: bookId,
-      chapter_id: 1,
-      event_order: 1,
-      short_title: '크로머의 협박 시작',
-      event_type: '갈등',
-      summary: '싱클레어가 크로머에게 거짓으로 도둑질담을 늘어놓은 후, 이를 미끼로 협박당해 돈을 갈취당하기 시작함.',
-      importance_score: 5,
-      is_core_event: true,
-      is_sensitive: false
-    },
-    {
-      event_id: 102,
-      books_id: bookId,
-      chapter_id: 1,
-      event_order: 2,
-      short_title: '데미안과의 첫 만남',
-      event_type: '인물 조우',
-      summary: '학교에 새로 전학 온 데미안이 싱클레어에게 카인의 표식에 대한 기묘한 이야기를 건네며 깊은 인상을 남김.',
-      importance_score: 5,
-      is_core_event: true,
-      is_sensitive: false
-    }
-  ]
+  await new Promise(r => setTimeout(r, 500));
+  const response = await getBookEventsForReview(bookId);
+  return response?.events || []; 
 }
 
-// "검수 완료" 버튼 클릭 시 호출 — 로컬에서 수정한 전체 데이터를 한 번에 전송
 async function submitStepData(bookId, stepKey, data) {
-  // const res = await fetch(`/api/admin/books/${bookId}/${stepKey}`, {
-  //   method: 'PUT',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ [stepKey]: data }),
-  // })
-  // if (!res.ok) throw new Error(`서버 오류: ${res.status}`)
-  // return res.json()
-
   await new Promise(r => setTimeout(r, 600))
   return { success: true }
 }
@@ -132,14 +38,11 @@ const initialStepStatus = { characters: 'active', relations: 'pending', events: 
 
 /* ============================================================
    훅: 단계별 데이터 로딩
-   - 해당 단계가 active/done 될 때만 fetch
-   - data: 로컬에서 자유롭게 수정 가능한 state
-   - isDirty: 원본 대비 변경 여부 (선택적으로 UI에 표시 가능)
 ============================================================ */
 
 function useStepData(bookId, stepKey, isActive) {
   const [data, setData]       = useState([])
-  const [origin, setOrigin]   = useState([])   // 서버에서 받은 원본 (비교용)
+  const [origin, setOrigin]   = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
@@ -231,8 +134,6 @@ function ErrorRow({ message, onRetry }) {
 
 /* ============================================================
    서브 컴포넌트: CharacterTable
-   - 수정/삭제/병합은 모두 로컬 state만 변경 (API 호출 없음)
-   - API 전송은 부모(StepSection)의 "검수 완료" 버튼에서 일괄 처리
 ============================================================ */
 
 function CharacterTable({ characters, setCharacters, loading, error, onRetry }) {
@@ -241,46 +142,47 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
   const [bulkMode, setBulkMode]   = useState(false)
   const [bulkDraft, setBulkDraft] = useState([])
 
-  /* 개별 수정 — 로컬만 반영 */
   const handleEdit = (char) => {
-    setEditingId(char.id)
-    setEditForm({ name: char.name, role: char.role, desc: char.desc })
+    setEditingId(char.character_id)
+    setEditForm({ 
+      character_name: char.character_name,
+      role: char.role, 
+      description: char.description 
+    })
   }
+  
   const handleSave = (id) => {
-    setCharacters(prev => prev.map(c => c.id === id ? { ...c, ...editForm } : c))
+    setCharacters(prev => prev.map(c => c.character_id === id ? { ...c, ...editForm } : c))
     setEditingId(null)
   }
+  
   const handleCancel = () => setEditingId(null)
 
-  /* 삭제 / 병합 — 로컬만 반영 */
-  const handleDelete = (id) => setCharacters(prev => prev.filter(c => c.id !== id))
-  const handleMerge  = (id) => setCharacters(prev => prev.filter(c => c.id !== id))
-
-  /* 전체 수정 — 로컬만 반영 */
   const enterBulk = () => {
     setBulkDraft(characters.map(c => ({ ...c })))
     setBulkMode(true)
     setEditingId(null)
   }
+  
   const saveBulk = () => {
     setCharacters(bulkDraft)
     setBulkMode(false)
   }
-  const cancelBulk   = () => setBulkMode(false)
-  const updateDraft  = (id, field, value) =>
-    setBulkDraft(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c))
-  const deleteDraft  = (id) => setBulkDraft(prev => prev.filter(c => c.id !== id))
+  
+  const cancelBulk = () => setBulkMode(false)
+  
+  const updateDraft = (id, field, value) =>
+    setBulkDraft(prev => prev.map(c => c.character_id === id ? { ...c, [field]: value } : c))
 
   const rows = bulkMode ? bulkDraft : characters
 
-  if (loading) return <LoadingRows />
-  if (error)   return <ErrorRow message={error} onRetry={onRetry} />
+  if (loading) return <div className="text-gray-400 p-4 text-center">데이터를 불러오는 중입니다...</div>
+  if (error) return <div className="text-red-500 p-4 text-center">에러: {error} <button onClick={onRetry} className="underline ml-2 text-xs">재시도</button></div>
 
   return (
     <div>
-      {/* 툴바 */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-400">{rows.length}명</p>
+        <p className="text-sm text-gray-400">검수 대상: {rows ? rows.length : 0}명</p>
         <div className="flex gap-2">
           {bulkMode ? (
             <>
@@ -302,69 +204,51 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
         </div>
       </div>
 
-      {/* 테이블 */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-5 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
-          <span>인물명</span><span>역할</span><span>첫 등장</span><span>설명</span><span>액션</span>
+        <div className="grid grid-cols-[1fr_1fr_2.5fr_0.5fr] px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
+          <span>인물명</span>
+          <span>역할</span>
+          <span>설명</span>
+          <span className="text-right">액션</span>
         </div>
 
-        {rows.map((char, i) => (
-          <div key={char.id}
-            className={`grid grid-cols-5 px-5 py-4 items-center text-sm
-              ${char.isDup ? 'bg-yellow-50' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+        {Array.isArray(rows) && rows.map((char, i) => (
+          <div key={char.character_id}
+            className={`grid grid-cols-[1fr_1fr_2.5fr_0.5fr] px-5 py-4 items-center text-sm
+              ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
               ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
           >
             {bulkMode ? (
               <>
-                <input value={char.name} onChange={e => updateDraft(char.id, 'name', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                <input value={char.role} onChange={e => updateDraft(char.id, 'role', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                <span className="text-gray-400 text-xs">{char.chapter}</span>
-                <input value={char.desc} onChange={e => updateDraft(char.id, 'desc', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                
+                <input value={char.character_name || ''} onChange={e => updateDraft(char.character_id, 'character_name', e.target.value)}
+                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={char.role || ''} onChange={e => updateDraft(char.character_id, 'role', e.target.value)}
+                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={char.description || ''} onChange={e => updateDraft(char.character_id, 'description', e.target.value)}
+                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[95%]" />
+                <span className="text-right text-xs text-gray-300">-</span>
               </>
-            ) : editingId === char.id ? (
+            ) : editingId === char.character_id ? (
               <>
-                <input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <input value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <span className="text-gray-400">{char.chapter}</span>
-                <input value={editForm.desc} onChange={e => setEditForm(p => ({ ...p, desc: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <div className="flex gap-2">
-                  <button onClick={() => handleSave(char.id)}
-                    className="px-3 py-1 bg-green-900 text-white text-xs rounded-full">
-                    저장
-                  </button>
-                  <button onClick={handleCancel}
-                    className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">
-                    취소
-                  </button>
+                <input value={editForm.character_name || ''} onChange={e => setEditForm(p => ({ ...p, character_name: e.target.value }))}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={editForm.role || ''} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={editForm.description || ''} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[95%]" />
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => handleSave(char.character_id)} className="text-green-700 font-medium hover:underline text-xs mr-2">저장</button>
+                  <button onClick={handleCancel} className="text-gray-400 hover:underline text-xs">취소</button>
                 </div>
               </>
             ) : (
               <>
-                <span className={`font-medium ${char.isDup ? 'text-yellow-700' : 'text-gray-900'}`}>
-                  {char.name}
-                  {char.isDup && (
-                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">중복의심</span>
-                  )}
-                </span>
+                <span className="font-medium text-gray-900">{char.character_name}</span>
                 <span className="text-gray-500">{char.role}</span>
-                <span className="text-gray-400">{char.chapter}</span>
-                <span className="text-gray-500 text-xs">{char.desc}</span>
-                <div className="flex gap-2">
-                  {/* {char.isDup && (
-                    <button onClick={() => handleMerge(char.id)}
-                      className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full hover:bg-yellow-200">
-                      병합
-                    </button>
-                  )} */}
+                <span className="text-gray-500 text-xs line-clamp-1 pr-4" title={char.description}>{char.description}</span>
+                <div className="text-right">
                   <button onClick={() => handleEdit(char)}
-                    className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">
+                    className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200 transition-colors">
                     수정
                   </button>
                 </div>
@@ -377,20 +261,23 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
   )
 }
 
+/* ============================================================
+   서브 컴포넌트: RelationTable
+============================================================ */
+
 function RelationTable({ data: relations, setData: setRelations, loading, error, onRetry }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkDraft, setBulkDraft] = useState([])
 
-  /* 개별 수정 — 로컬만 반영 */
   const handleEdit = (rel) => {
-    setEditingId(rel.relationship_change_id) // PK 변경
+    setEditingId(rel.relationship_change_id)
     setEditForm({ 
-      source_character_id: rel.source_character_id, 
-      target_character_id: rel.target_character_id, 
       relation: rel.relation, 
-      change_summary: rel.change_summary 
+      change_summary: rel.change_summary,
+      importance_score: rel.importance_score,
+      is_core_relation: rel.is_core_relation
     })
   }
   
@@ -400,7 +287,6 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
   }
   const handleCancel = () => setEditingId(null)
 
-  /* 전체 수정 — 로컬만 반영 */
   const enterBulk = () => {
     setBulkDraft(relations.map(r => ({ ...r })))
     setBulkMode(true)
@@ -411,18 +297,17 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
     setBulkMode(false)
   }
   const cancelBulk = () => setBulkMode(false)
+  
   const updateDraft = (id, field, value) =>
     setBulkDraft(prev => prev.map(r => r.relationship_change_id === id ? { ...r, [field]: value } : r))
-  const deleteDraft = (id) => setBulkDraft(prev => prev.filter(r => r.relationship_change_id !== id))
 
   const rows = bulkMode ? bulkDraft : relations
 
-  if (loading) return <LoadingRows />
-  if (error)   return <ErrorRow message={error} onRetry={onRetry} />
+  if (loading) return <div>로딩 중...</div>
+  if (error) return <div>에러 발생: {error} <button onClick={onRetry}>재시도</button></div>
 
   return (
-    <div>
-      {/* 툴바 */}
+    <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{rows.length}개 관계</p>
         <div className="flex gap-2">
@@ -446,61 +331,133 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
         </div>
       </div>
 
-      {/* 테이블 */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-5 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
-          <span>인물 A (ID)</span><span>인물 B (ID)</span><span>관계 내용</span><span>변경 요약</span><span>액션</span>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-[800px]">
+        <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400 gap-4">
+          <span className="col-span-2">인물 관계 (A → B)</span>
+          <span className="col-span-2">관계명</span>
+          <span className="col-span-4">변경 요약</span>
+          <span className="col-span-1 text-center">중요도</span>
+          <span className="col-span-1 text-center">핵심여부</span>
+          <span className="col-span-2 text-right">액션</span>
         </div>
 
         {rows.map((rel, i) => (
           <div key={rel.relationship_change_id}
-            className={`grid grid-cols-5 px-5 py-4 items-center text-sm
-              ${rel.is_core_relation ? 'bg-blue-50/30' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+            className={`grid grid-cols-12 px-5 py-4 items-center text-sm gap-4
+              ${rel.is_core_relation ? 'bg-blue-50/40 font-medium' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
               ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
           >
+            <div className="col-span-2 flex flex-col truncate">
+              <span className="text-gray-900 font-medium">
+                {rel.source_character_name} → {rel.target_character_name}
+              </span>
+              <span className="text-gray-400 text-xs">
+                (ID: {rel.source_character_id} → {rel.target_character_id})
+              </span>
+            </div>
+
             {bulkMode ? (
               <>
-                <input value={rel.source_character_id} onChange={e => updateDraft(rel.relationship_change_id, 'source_character_id', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                <input value={rel.target_character_id} onChange={e => updateDraft(rel.relationship_change_id, 'target_character_id', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                <input value={rel.relation} onChange={e => updateDraft(rel.relationship_change_id, 'relation', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                <input value={rel.change_summary} onChange={e => updateDraft(rel.relationship_change_id, 'change_summary', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                {/* <div>
-                  <button onClick={() => deleteDraft(rel.relationship_change_id)}
-                    className="px-3 py-1 bg-red-50 text-red-500 text-xs rounded-full hover:bg-red-100">
-                    삭제
-                  </button>
-                </div> */}
+                <div className="col-span-2">
+                  <input 
+                    value={rel.relation || ''} 
+                    onChange={e => updateDraft(rel.relationship_change_id, 'relation', e.target.value)}
+                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-4">
+                  <input 
+                    value={rel.change_summary || ''} 
+                    onChange={e => updateDraft(rel.relationship_change_id, 'change_summary', e.target.value)}
+                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-1 text-center">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={rel.importance_score || 0} 
+                    onChange={e => updateDraft(rel.relationship_change_id, 'importance_score', e.target.value)}
+                    className="border border-gray-200 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-1 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={!!rel.is_core_relation} 
+                    onChange={e => updateDraft(rel.relationship_change_id, 'is_core_relation', e.target.checked)}
+                    className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900"
+                  />
+                </div>
+                <div className="col-span-2 text-right text-gray-400 text-xs">
+                  수정 중
+                </div>
               </>
             ) : editingId === rel.relationship_change_id ? (
               <>
-                <input value={editForm.source_character_id} onChange={e => setEditForm(p => ({ ...p, source_character_id: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <input value={editForm.target_character_id} onChange={e => setEditForm(p => ({ ...p, target_character_id: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <input value={editForm.relation} onChange={e => setEditForm(p => ({ ...p, relation: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <input value={editForm.change_summary} onChange={e => setEditForm(p => ({ ...p, change_summary: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs" />
-                <div className="flex gap-2">
-                  <button onClick={() => handleSave(rel.relationship_change_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full">저장</button>
-                  <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">취소</button>
+                <div className="col-span-2">
+                  <input 
+                    value={editForm.relation || ''} 
+                    onChange={e => setEditForm(p => ({ ...p, relation: e.target.value }))}
+                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-4">
+                  <input 
+                    value={editForm.change_summary || ''} 
+                    onChange={e => setEditForm(p => ({ ...p, change_summary: e.target.value }))}
+                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-1 text-center">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={editForm.importance_score || 0} 
+                    onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value }))}
+                    className="border border-gray-300 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
+                  />
+                </div>
+                <div className="col-span-1 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={!!editForm.is_core_relation} 
+                    onChange={e => setEditForm(p => ({ ...p, is_core_relation: e.target.checked }))}
+                    className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900"
+                  />
+                </div>
+                <div className="col-span-2 flex gap-1 justify-end">
+                  <button onClick={() => handleSave(rel.relationship_change_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full hover:bg-green-800">저장</button>
+                  <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">취소</button>
                 </div>
               </>
             ) : (
               <>
-                <span className="font-medium text-gray-900">{rel.source_character_id}</span>
-                <span className="font-medium text-gray-900">{rel.target_character_id}</span>
-                <span className="text-green-800 font-semibold text-xs bg-green-50 px-2 py-0.5 rounded w-max truncate max-w-full" title={rel.relation}>
-                  {rel.relation}
-                </span>
-                <span className="text-gray-500 text-xs truncate pr-2" title={rel.change_summary}>
-                  {rel.change_summary}
-                </span>
-                <div className="flex gap-2">
+                <div className="col-span-2">
+                  <span className="text-green-800 font-semibold text-xs bg-green-50 px-2 py-1 rounded block w-max truncate max-w-full" title={rel.relation}>
+                    {rel.relation}
+                  </span>
+                </div>
+                <div className="col-span-4">
+                  <span className="text-gray-500 text-xs block truncate pr-2" title={rel.change_summary}>
+                    {rel.change_summary}
+                  </span>
+                </div>
+                <div className="col-span-1 text-center font-mono text-xs text-gray-600">
+                  {Number(rel.importance_score).toFixed(2)}
+                </div>
+                <div className="col-span-1 text-center">
+                  {rel.is_core_relation ? (
+                    <span className="text-blue-600 bg-blue-50 text-[10px] font-bold px-1.5 py-0.5 rounded-full">CORE</span>
+                  ) : (
+                    <span className="text-gray-300">-</span>
+                  )}
+                </div>
+                <div className="col-span-2 text-right">
                   <button onClick={() => handleEdit(rel)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
                 </div>
               </>
@@ -512,19 +469,22 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
   )
 }
 
+/* ============================================================
+   서브 컴포넌트: EventTable
+   - 유형(event_type) 컬럼 제거
+   - 챕터 ID 읽기 전용 (수정 불가)
+============================================================ */
+
 function EventTable({ data: events, setData: setEvents, loading, error, onRetry }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkDraft, setBulkDraft] = useState([])
 
-  /* 개별 수정 — 로컬만 반영 */
   const handleEdit = (evt) => {
     setEditingId(evt.event_id)
     setEditForm({ 
       short_title: evt.short_title, 
-      chapter_id: evt.chapter_id, 
-      event_type: evt.event_type, 
       summary: evt.summary,
       importance_score: evt.importance_score,
       is_sensitive: evt.is_sensitive
@@ -536,10 +496,6 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
   }
   const handleCancel = () => setEditingId(null)
 
-  /* 삭제 — 로컬만 반영 */
-  const handleDelete = (id) => setEvents(prev => prev.filter(e => e.event_id !== id))
-
-  /* 전체 수정 — 로컬만 반영 */
   const enterBulk = () => {
     setBulkDraft(events.map(e => ({ ...e })))
     setBulkMode(true)
@@ -553,7 +509,6 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
   
   const updateDraft = (id, field, value) =>
     setBulkDraft(prev => prev.map(e => e.event_id === id ? { ...e, [field]: value } : e))
-  const deleteDraft = (id) => setBulkDraft(prev => prev.filter(e => e.event_id !== id))
 
   const rows = bulkMode ? bulkDraft : events
 
@@ -562,7 +517,6 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
 
   return (
     <div>
-      {/* 툴바 */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{rows.length}개 사건</p>
         <div className="flex gap-2">
@@ -586,11 +540,14 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
         </div>
       </div>
 
-      {/* 테이블 */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* 그리드 비율 조정을 위해 컬럼 구성 변경 (6개 영역으로 확장 또는 너비 배분) */}
         <div className="grid grid-cols-6 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
-          <span>사건명 / 유형</span><span>챕터 ID</span><span>중요도</span><span>민감 여부</span><span>사건 요약</span><span>액션</span>
+          <span>사건명</span>
+          <span>챕터 ID</span>
+          <span>중요도</span>
+          <span>민감 여부</span>
+          <span>사건 요약</span>
+          <span>액션</span>
         </div>
 
         {rows.map((evt, i) => (
@@ -601,62 +558,62 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
           >
             {bulkMode ? (
               <>
-                {/* 사건명 및 유형 (묶음 혹은 단일 input) */}
-                <div className="flex flex-col gap-1 pr-2">
+                {/* 사건명 (유형 제거) */}
+                <div className="pr-2">
                   <input value={evt.short_title || ''} onChange={e => updateDraft(evt.event_id, 'short_title', e.target.value)}
                     className="border border-gray-200 rounded px-2 py-1 text-xs w-full" placeholder="사건명" />
-                  <input value={evt.event_type || ''} onChange={e => updateDraft(evt.event_id, 'event_type', e.target.value)}
-                    className="border border-gray-200 rounded px-2 py-1 text-[11px] w-full text-gray-500" placeholder="유형" />
                 </div>
-                
-                <input value={evt.chapter_id || ''} onChange={e => updateDraft(evt.event_id, 'chapter_id', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-20" />
-                
-                {/* 중요도 점수 수정 */}
-                <input type="number" min="0" max="10" value={evt.importance_score || 0} onChange={e => updateDraft(evt.event_id, 'importance_score', parseInt(e.target.value) || 0)}
+
+                {/* 챕터 ID — 읽기 전용 */}
+                <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
+
+                {/* 중요도 */}
+                <input type="number" min="0" max="10" value={evt.importance_score || 0}
+                  onChange={e => updateDraft(evt.event_id, 'importance_score', parseInt(e.target.value) || 0)}
                   className="border border-gray-200 rounded px-2 py-1 text-xs w-16" />
-                
-                {/* 민감도 체크박스 수정 */}
+
+                {/* 민감도 */}
                 <label className="flex items-center gap-1 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!evt.is_sensitive} onChange={e => updateDraft(evt.event_id, 'is_sensitive', e.target.checked)}
+                  <input type="checkbox" checked={!!evt.is_sensitive}
+                    onChange={e => updateDraft(evt.event_id, 'is_sensitive', e.target.checked)}
                     className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
                   <span className="text-xs text-gray-500">민감</span>
                 </label>
 
+                {/* 사건 요약 */}
                 <input value={evt.summary || ''} onChange={e => updateDraft(evt.event_id, 'summary', e.target.value)}
                   className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-                
-                {/* <div>
-                  <button onClick={() => deleteDraft(evt.event_id)}
-                    className="px-3 py-1 bg-red-50 text-red-500 text-xs rounded-full hover:bg-red-100">
-                    삭제
-                  </button>
-                </div> */}
+
+                <span className="text-gray-300 text-xs">-</span>
               </>
             ) : editingId === evt.event_id ? (
               <>
-                <div className="flex flex-col gap-1 pr-2">
+                {/* 사건명 (유형 제거) */}
+                <div className="pr-2">
                   <input value={editForm.short_title || ''} onChange={e => setEditForm(p => ({ ...p, short_title: e.target.value }))}
                     className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
-                  <input value={editForm.event_type || ''} onChange={e => setEditForm(p => ({ ...p, event_type: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1 text-[11px] w-full" />
                 </div>
-                
-                <input value={editForm.chapter_id || ''} onChange={e => setEditForm(p => ({ ...p, chapter_id: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-20" />
-                
-                <input type="number" min="0" max="10" value={editForm.importance_score || 0} onChange={e => setEditForm(p => ({ ...p, importance_score: parseInt(e.target.value) || 0 }))}
+
+                {/* 챕터 ID — 읽기 전용 */}
+                <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
+
+                {/* 중요도 */}
+                <input type="number" min="0" max="10" value={editForm.importance_score || 0}
+                  onChange={e => setEditForm(p => ({ ...p, importance_score: parseInt(e.target.value) || 0 }))}
                   className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
-                
+
+                {/* 민감도 */}
                 <label className="flex items-center gap-1 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!editForm.is_sensitive} onChange={e => setEditForm(p => ({ ...p, is_sensitive: e.target.checked }))}
+                  <input type="checkbox" checked={!!editForm.is_sensitive}
+                    onChange={e => setEditForm(p => ({ ...p, is_sensitive: e.target.checked }))}
                     className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
                   <span className="text-xs text-gray-500">민감</span>
                 </label>
 
+                {/* 사건 요약 */}
                 <input value={editForm.summary || ''} onChange={e => setEditForm(p => ({ ...p, summary: e.target.value }))}
                   className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
-                
+
                 <div className="flex gap-2">
                   <button onClick={() => handleSave(evt.event_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full">저장</button>
                   <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">취소</button>
@@ -664,18 +621,18 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
               </>
             ) : (
               <>
-                <div className="flex flex-col">
-                  <span className="font-medium text-gray-900">{evt.short_title}</span>
-                  <span className="text-[11px] text-gray-400 mt-0.5">{evt.event_type || '미지정'}</span>
-                </div>
+                {/* 사건명 (유형 서브텍스트 제거) */}
+                <span className="font-medium text-gray-900">{evt.short_title}</span>
+
+                {/* 챕터 ID */}
                 <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
-                
-                {/* 중요도 뱃지 노출 */}
+
+                {/* 중요도 뱃지 */}
                 <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-max">
                   ★ {evt.importance_score || 0}
                 </span>
 
-                {/* 민감도 노출 */}
+                {/* 민감도 */}
                 <div>
                   {evt.is_sensitive ? (
                     <span className="text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">민감</span>
@@ -685,10 +642,9 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
                 </div>
 
                 <span className="text-gray-500 text-xs truncate pr-2" title={evt.summary}>{evt.summary}</span>
-                
+
                 <div className="flex gap-2">
                   <button onClick={() => handleEdit(evt)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
-                  {/* <button onClick={() => handleDelete(evt.event_id)} className="px-3 py-1 bg-red-50 text-red-500 text-xs rounded-full hover:bg-red-100">삭제</button> */}
                 </div>
               </>
             )}
@@ -701,7 +657,6 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
 
 /* ============================================================
    서브 컴포넌트: StepSection
-   - "검수 완료" 클릭 시 로컬 데이터를 API로 일괄 전송 후 다음 단계 활성화
 ============================================================ */
 
 function StepSection({ step, index, status, data, onComplete, children }) {
@@ -783,7 +738,6 @@ function Review() {
       .catch(err => console.error(err))
   }, [])
 
-  // "검수 완료" — 로컬 데이터를 API로 일괄 전송 후 다음 단계 활성화
   const handleComplete = async (stepKey, data) => {
     await submitStepData(bookId, stepKey, data)
     const idx  = STEPS.findIndex(s => s.key === stepKey)
@@ -800,19 +754,29 @@ function Review() {
     setStepStatus(initialStepStatus)
   }
 
-  // 최종 승인 — 필요 시 별도 엔드포인트 호출
-  const handleFinalApprove = async () => {
-    setFinalSubmitting(true)
-    try {
-      // await fetch(`/api/admin/books/${bookId}/approve`, { method: 'POST' })
-      await new Promise(r => setTimeout(r, 500))
-      alert('최종 승인 완료')
-    } finally {
-      setFinalSubmitting(false)
-    }
-  }
+ // handleFinalApprove 수정
+const handleFinalApprove = async () => {
+  setFinalSubmitting(true)
+  try {
+    const res = await approveAnalysisForReview(bookId, {
+      characters: charData.data,
+      relations:  relData.data,
+      events:     eventData.data,
+    })
 
-  /* 책 선택 화면 */
+    if (res?.error) {
+      alert(`승인 실패: ${res.message}`)
+      return
+    }
+
+    alert('최종 승인 완료')
+  } catch (err) {
+    alert(`승인 실패: ${err.message}`)
+  } finally {
+    setFinalSubmitting(false)
+  }
+}
+
   if (!selectedBook) {
     return (
       <div>
@@ -847,7 +811,6 @@ function Review() {
     events:     eventData.data,
   }
 
-  /* 검수 화면 */
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
@@ -883,14 +846,10 @@ function Review() {
             />
           )}
           {step.key === 'relations' && (
-            // TODO: RelationTable 컴포넌트 연결
             <RelationTable data={relData.data} setData={relData.setData} loading={relData.loading} error={relData.error} onRetry={relData.reload} />
-            // <p className="text-sm text-gray-400">관계 데이터 준비 중입니다.</p>
           )}
           {step.key === 'events' && (
-            // TODO: EventTable 컴포넌트 연결
-             <EventTable data={eventData.data} setData={eventData.setData} loading={eventData.loading} error={eventData.error} onRetry={eventData.reload} />
-            // <p className="text-sm text-gray-400">사건 데이터 준비 중입니다.</p>
+            <EventTable data={eventData.data} setData={eventData.setData} loading={eventData.loading} error={eventData.error} onRetry={eventData.reload} />
           )}
         </StepSection>
       ))}
