@@ -82,6 +82,10 @@ export const getBookById = (bookId) => authFetch(`/books/${bookId}`)
 // 챕터 목록
 export const getBookChapters = (bookId) => authFetch(`/books/${bookId}/chapters`)
 
+// 사건 목록
+export const getBookEvents = (bookId, chapter, p) => 
+  authFetch(`/books/${bookId}/events?c=${chapter}&p=${p}`)
+
 // 인물 관계도
 export const getBookRelations = (bookId, chapter, p = 1) => 
   authFetch(`/books/${bookId}/relations?c=${chapter}&p=${p}`)

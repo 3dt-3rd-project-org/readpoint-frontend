@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import cytoscape from 'cytoscape'
-import { getBooks, getBookRelations } from '../api'
+import { getBooks, getBookRelations, getBookChapters, getBookEvents } from '../api'
 
 function Graph() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -18,20 +18,10 @@ function Graph() {
   const [searchTerm, setSearchTerm] = useState('')
   const [graphNodes, setGraphNodes] = useState([])
   const [controlsCollapsed, setControlsCollapsed] = useState(false)
+  const [chapters, setChapters] = useState([])
+  const [events, setEvents] = useState([])
 
-  const [eventsByChapter] = useState({
-    1: [
-      { event_id: 1, event_order: 1, short_title: '밝은 세계와 어두운 세계', start_paragraph_id: 1 },
-      { event_id: 2, event_order: 2, short_title: '크로머와의 만남', start_paragraph_id: 10 },
-      { event_id: 3, event_order: 3, short_title: '거짓말과 협박', start_paragraph_id: 20 },
-    ],
-    2: [
-      { event_id: 4, event_order: 1, short_title: '데미안의 등장', start_paragraph_id: 30 },
-      { event_id: 5, event_order: 2, short_title: '카인 이야기', start_paragraph_id: 40 },
-    ],
-  })
-
-  const currentEvents = eventsByChapter[currentChapter] || []
+  const currentEvents = events
   const filteredEvents = currentEvents.filter(ev =>
     ev.short_title.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -50,15 +40,28 @@ function Graph() {
   }, [bookId, books])
 
   useEffect(() => {
+  if (!bookId) return
+  getBookChapters(bookId).then(data => {
+    const chaps = data.chapters || []
+    setChapters(chaps)
+    setMaxChapter(chaps.length || 8)
+  })
+}, [bookId])
+
+  useEffect(() => {
+    if (!bookId) return
+    getBookEvents(bookId, currentChapter, 9999).then(data => {
+      setEvents((data.events || []).filter(e => e.chapter_order === currentChapter))
+    })
     setSelectedEvent(null)
     setSearchTerm('')
-  }, [currentChapter])
+  }, [bookId, currentChapter])
 
   useEffect(() => {
     if (!bookId || !cyRef.current) return
 
     let cancelled = false
-    const p = selectedEvent?.start_paragraph_id || 1
+    const p = selectedEvent?.start_paragraph_order || 1
 
     getBookRelations(bookId, currentChapter, p)
       .then(data => {
@@ -198,8 +201,10 @@ function Graph() {
                 onChange={(e) => setCurrentChapter(Number(e.target.value))}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-800 outline-none focus:border-green-800 focus:ring-1 focus:ring-green-800 cursor-pointer"
               >
-                {Array.from({ length: maxChapter }, (_, i) => i + 1).map(ch => (
-                  <option key={ch} value={ch}>제 {ch} 장</option>
+                {chapters.map(ch => (
+                  <option key={ch.chapter_id} value={ch.chapter_order}>
+                    {ch.title || `제 ${ch.chapter_order} 장`}
+                  </option>
                 ))}
               </select>
             </div>
