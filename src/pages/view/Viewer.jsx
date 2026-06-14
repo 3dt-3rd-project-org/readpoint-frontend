@@ -18,12 +18,20 @@ function Viewer() {
   const [persons, setPersons] = useState([])
   const [currentP, setCurrentP] = useState(0)
   const [chapters, setChapters] = useState([])
-  // toc랑 매칭해서 href 찾기
+  
   const getHrefByTitle = (title) => {
     const found = toc.find(item =>
       item.label.includes(title) || title.includes(item.label)
     )
     return found?.href
+  }
+  const [showFontPanel, setShowFontPanel] = useState(false)
+  const [fontSize, setFontSize] = useState(100)
+
+  const changeFontSize = (delta) => {
+    const newSize = Math.min(150, Math.max(70, fontSize + delta))
+    setFontSize(newSize)
+    renditionRef.current?.themes.fontSize(`${newSize}%`)
   }
 
 
@@ -133,19 +141,58 @@ function Viewer() {
       <div className="flex-1 flex flex-col">
         {/* 상단 바 */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
-          <button
-            onClick={() => navigate('/library')}
-            className="text-sm text-green-800 font-semibold hover:text-green-600 flex items-center gap-1"
-          >
-            <ChevronLeft size={16} />
-            서재
-          </button>
+          {/* 왼쪽 */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/library')}
+              className="text-sm text-green-800 font-semibold hover:text-green-600 flex items-center gap-1"
+            >
+              <ChevronLeft size={16} />
+              서재
+            </button>
+          </div>
+
+          {/* 가운데 */}
           <p className="text-sm text-gray-500 font-medium">{bookInfo?.title || '로딩 중...'}</p>
+
+          {/* 오른쪽 */}
           <div className="flex items-center gap-4">
+            {/* Aa 버튼 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFontPanel(!showFontPanel)}
+                className={`text-sm font-bold transition-colors ${
+                  showFontPanel ? 'text-green-900' : 'text-gray-400 hover:text-green-900'
+                }`}
+              >
+                Aa
+              </button>
+              {showFontPanel && (
+                <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-44 z-50">
+                  <p className="text-xs text-gray-400 mb-3">글씨 크기</p>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => changeFontSize(-10)}
+                      className="w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50 font-bold text-xs"
+                    >
+                      가
+                    </button>
+                    <span className="text-xs text-gray-500">{fontSize}%</span>
+                    <button
+                      onClick={() => changeFontSize(10)}
+                      className="w-8 h-8 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold text-sm"
+                    >
+                      가
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setShowPersonPanel(!showPersonPanel)}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                showPersonPanel ? 'text-green-900' : 'text-gray-400 hover:text-green-900'
+              className={`text-sm font-semibold flex items-center gap-1 transition-colors ${
+                showPersonPanel ? 'text-green-900' : 'text-gray-500 hover:text-green-900'
               }`}
             >
               <Users size={16} />
@@ -153,14 +200,13 @@ function Viewer() {
             </button>
             <button
               onClick={() => navigate(`/graph?bookId=${booksId}`)}
-              className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-green-900 transition-colors"
-            >
+              className="text-sm text-gray-500 font-semibold flex items-center gap-1 hover:text-green-900 transition-colors"
+              >
               <Network size={16} />
               관계도
             </button>
           </div>
         </div>
-
         {/* epub 렌더링 영역 */}
         <div className="flex flex-1 overflow-hidden">
           <div ref={viewerRef} className="flex-1 overflow-y-auto h-full" />
