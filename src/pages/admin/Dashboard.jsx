@@ -378,11 +378,18 @@ function Dashboard() {
                       onClick={() => navigate(`/admin/review?bookId=${currentId}`)}
                       className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm"
                     >
-                      검수하기
+                      1차 검수하기
                     </button>
                   )}
                   {book.status === 'ANALYZING_COMPLETE' && <button onClick={() => handleSummarize(currentId)} className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">요약 생성</button>}
-                  {book.status === 'SUMMARIZING_COMPLETE' && <button onClick={() => handleApproveSummary(currentId)} className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm">2차 검수 승인</button>}
+                  {book.status === 'SUMMARIZING_COMPLETE' && (
+                      <button
+                        onClick={() => navigate(`/admin/review?bookId=${currentId}`)}
+                        className="px-4 py-1.5 bg-blue-50 text-blue-900 border border-blue-300 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        2차 검수하기
+                      </button>
+                    )}
                   {isError && <button onClick={() => handleRetry(currentId)} className="px-4 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-sm">재시도</button>}
                 </span>
               </div>

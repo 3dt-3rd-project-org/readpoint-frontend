@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 function Auth() {
-  const [tab, setTab] = useState('login');
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isPending = searchParams.get('pending') === 'true'
+  const [modal, setModal] = useState(null)
+  const [pendingLoginType, setPendingLoginType] = useState(null)
+
+  const alreadyAgreed = localStorage.getItem('privacyAgreed') === 'true'
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
@@ -14,13 +17,17 @@ function Auth() {
       navigate(role === 'ADMIN' ? '/admin' : '/library', { replace: true })
     }
   }, [])
-  const [modal, setModal] = useState(null);
-  const [privacyAgreed, setPrivacyAgreed] = useState(false)
 
-  const handleGoogleAuth = () => {
-    const GOOGLE_CLIENT_ID = '898813475333-g6vpbm9jgrvm4v8ec6525c73rcd52toq.apps.googleusercontent.com';
-    const REDIRECT_URI = 'http://localhost:5173/auth/callback';
+  // 동의 후 구글 로그인 진행
+  useEffect(() => {
+    if (pendingLoginType && alreadyAgreed) {
+      startGoogleAuth(pendingLoginType)
+    }
+  }, [pendingLoginType, alreadyAgreed])
 
+  const startGoogleAuth = (loginType) => {
+    const GOOGLE_CLIENT_ID = '898813475333-g6vpbm9jgrvm4v8ec6525c73rcd52toq.apps.googleusercontent.com'
+    const REDIRECT_URI = 'http://localhost:5173/auth/callback'
     const googleAuthUrl =
       `https://accounts.google.com/o/oauth2/v2/auth?` +
       `response_type=code` +
@@ -28,15 +35,111 @@ function Auth() {
       `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
       `&scope=openid%20email%20profile` +
       `&access_type=offline` +
-      `&prompt=select_account`;
-
-    localStorage.setItem('loginType', tab === 'admin' ? 'admin' : 'user')
+      `&prompt=select_account`
+    localStorage.setItem('loginType', loginType)
     window.location.href = googleAuthUrl
+  }
+
+  const handleLogin = (loginType) => {
+    if (!alreadyAgreed) {
+      setPendingLoginType(loginType)
+      setModal('privacy_agree')
+    } else {
+      startGoogleAuth(loginType)
+    }
+  }
+
+  const handleAgree = () => {
+    localStorage.setItem('privacyAgreed', 'true')
+    setModal(null)
+    if (pendingLoginType) startGoogleAuth(pendingLoginType)
   }
 
   return (
     <>
-      {modal && (
+      {/* 모달 */}
+      {modal === 'privacy_agree' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">서비스 이용 동의</h2>
+            <p className="text-xs text-gray-400 mb-5">아래 약관을 확인하고 동의해 주세요.</p>
+
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+
+              {/* 이용약관 */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                  <p className="text-xs font-semibold text-gray-700">이용약관 (필수)</p>
+                </div>
+                <div className="px-4 py-3 text-xs text-gray-500 leading-relaxed whitespace-pre-line h-28 overflow-y-auto">
+      {`제1조 (목적)
+      본 약관은 Readpoint(이하 "서비스")가 제공하는 독서 기록 및 인물 관계도 서비스의 이용에 관한 조건 및 절차를 규정합니다.
+
+      제2조 (이용 자격)
+      만 14세 이상 누구나 Google 계정으로 가입하여 서비스를 이용할 수 있습니다.
+
+      제3조 (서비스 내용)
+      서비스는 공개 도서의 인물 관계도 및 독서 기록 기능을 제공합니다. 저작권이 만료된 공개 도메인 도서만 제공됩니다.
+
+      제4조 (금지 행위)
+      서비스를 악용하거나 타인의 이용을 방해하는 행위, 무단 크롤링, 자동화 도구를 이용한 데이터 수집을 금지합니다.
+
+      제5조 (서비스 변경 및 중단)
+      서비스 내용은 사전 고지 후 변경될 수 있으며, 불가피한 경우 예고 없이 중단될 수 있습니다.
+
+      제6조 (면책 조항)
+      서비스는 제공된 데이터의 정확성을 보장하지 않으며, 이용자의 서비스 이용으로 발생한 손해에 대해 책임을 지지 않습니다.`}
+                </div>
+              </div>
+
+              {/* 개인정보처리방침 */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                  <p className="text-xs font-semibold text-gray-700">개인정보 수집 및 이용 동의 (필수)</p>
+                </div>
+                <div className="px-4 py-3 text-xs text-gray-500 leading-relaxed whitespace-pre-line h-28 overflow-y-auto">
+      {`1. 수집 항목
+      - 이메일 주소, 닉네임 (Google 계정 기반)
+      - 서비스 이용 기록 (독서 진도, 북마크)
+
+      2. 수집 목적
+      - 회원 식별 및 서비스 이용
+      - 맞춤형 독서 기록 제공
+
+      3. 보유 기간
+      - 회원 탈퇴 시까지
+      - 관련 법령에 따라 보존이 필요한 경우 해당 기간 보유
+
+      4. 제3자 제공
+      - 수집된 정보는 제3자에게 제공되지 않습니다.
+      - 단, Google OAuth 인증을 통해 Google로부터 기본 프로필 정보를 수신합니다.
+
+      5. 이용자 권리
+      - 개인정보 열람, 수정, 삭제를 요청할 수 있습니다.
+      - 회원 탈퇴 시 모든 개인정보가 삭제됩니다.`}
+                </div>
+              </div>
+
+            </div>
+
+            <button
+              onClick={handleAgree}
+              className="w-full mt-5 bg-green-900 text-white py-3 rounded-full text-sm font-semibold hover:bg-green-800 transition-colors"
+            >
+              전체 동의하고 계속하기
+            </button>
+            <button
+              onClick={() => { setModal(null); setPendingLoginType(null) }}
+              className="w-full mt-2 py-2 rounded-full text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+
+      {modal && modal !== 'privacy_agree' && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
             <h2 className="text-lg font-bold text-gray-900 mb-4">
@@ -61,83 +164,23 @@ function Auth() {
         <div className="w-full max-w-md">
 
           <div className="text-center mb-8">
-            <Link to="/" className="text-3xl font-bold text-green-900">
-              📖 Readpoint
-            </Link>
-            <p className="mt-2 text-gray-500 text-sm">
-              {tab === 'login' ? '다시 만나서 반가워요' : '독서 기록을 시작해볼까요'}
-            </p>
+            <Link to="/" className="text-3xl font-bold text-green-900">📖 Readpoint</Link>
+            <p className="mt-2 text-gray-500 text-sm">스포일러 없이, 더 깊이.</p>
           </div>
+
           {isPending && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 mb-4 text-sm text-blue-700 text-center">
               관리자 가입 승인 요청이 완료되었습니다.<br />
               Teams 승인 완료 후 다시 로그인해 주세요.
             </div>
           )}
+
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-10">
+            <p className="text-center text-sm text-gray-500 mb-6">Google 계정으로 간편하게 시작하세요</p>
 
-            {/* 탭 */}
-            <div className="flex bg-gray-100 rounded-full p-1 mb-8">
-              <button
-                onClick={() => { setTab('login'); setPrivacyAgreed(false) }}
-                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  tab === 'login' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                로그인
-              </button>
-              <button
-                onClick={() => { setTab('register'); setPrivacyAgreed(false) }}
-                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  tab === 'register' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                회원가입
-              </button>
-              <button
-                onClick={() => { setTab('admin'); setPrivacyAgreed(false) }}
-                className={`flex-1 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  tab === 'admin' ? 'bg-white text-green-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                관리자
-              </button>
-            </div>
-
-            <p className="text-center text-sm text-gray-500 mb-6">
-              {tab === 'login'
-                ? 'Google 계정으로 간편하게 로그인하세요'
-                : tab === 'register'
-                ? 'Google 계정으로 간편하게 시작하세요'
-                : '관리자 계정으로 로그인하세요'}
-            </p>
-
-            {/* 개인정보 동의 (회원가입 탭만) */}
-            {tab === 'register' && (
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 text-xs text-gray-600 leading-relaxed border border-gray-200">
-                <p className="mb-3">
-                  Readpoint는 서비스 제공을 위해 아래와 같이 최소한의 개인정보를 수집합니다.
-                </p>
-                <p className="mb-1"><span className="font-semibold">수집 항목:</span> 이메일 주소, 닉네임 (Google 계정 기반)</p>
-                <p className="mb-1"><span className="font-semibold">수집 목적:</span> 회원 식별 및 서비스 이용</p>
-                <p className="mb-3"><span className="font-semibold">보유 기간:</span> 회원 탈퇴 시까지</p>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={privacyAgreed}
-                    onChange={(e) => setPrivacyAgreed(e.target.checked)}
-                    className="accent-green-800 w-4 h-4"
-                  />
-                  <span className="font-semibold text-gray-700">위 개인정보 수집 및 이용에 동의합니다. (필수)</span>
-                </label>
-              </div>
-            )}
-
-            {/* Google 버튼 */}
             <button
-              onClick={handleGoogleAuth}
-              disabled={tab === 'register' && !privacyAgreed}
-              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => handleLogin('user')}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm"
             >
               <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -145,49 +188,33 @@ function Auth() {
                 <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
                 <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
               </svg>
-              <span className="text-sm font-semibold text-gray-700">
-                Google로 {tab === 'login' ? '로그인' : tab === 'register' ? '회원가입' : '관리자 로그인'}
-              </span>
+              <span className="text-sm font-semibold text-gray-700">Google로 시작하기</span>
             </button>
-
-            <p className="mt-6 text-center text-xs text-gray-400">
-              {tab === 'login' ? (
-                <>
-                  계정이 없으신가요?{' '}
-                  <button onClick={() => { setTab('register'); setPrivacyAgreed(false) }} className="text-green-900 font-semibold hover:underline">
-                    회원가입
-                  </button>
-                </>
-              ) : tab === 'register' ? (
-                <>
-                  이미 계정이 있으신가요?{' '}
-                  <button onClick={() => { setTab('login'); setPrivacyAgreed(false) }} className="text-green-900 font-semibold hover:underline">
-                    로그인
-                  </button>
-                </>
-              ) : null}
-            </p>
           </div>
-          
-          {tab !== 'register' && (
-            <p className="mt-4 text-center text-xs text-gray-400">
-              계속 진행하면{' '}
-              <span
-                onClick={() => setModal('terms')}
-                className="underline cursor-pointer hover:text-gray-600"
-              >이용약관</span>
-              {' '}및{' '}
-              <span
-                onClick={() => setModal('privacy')}
-                className="underline cursor-pointer hover:text-gray-600"
-              >개인정보처리방침</span>
-              에 동의하는 것으로 간주합니다
-            </p>
-          )}
+
+          <p className="mt-4 text-center text-xs text-gray-400">
+            <button
+              onClick={() => {
+                setPendingLoginType('user')
+                setModal('privacy_agree')
+              }}
+              className="text-green-900 font-semibold hover:underline"
+            >
+              회원가입
+            </button>
+            {' | '}
+            <button
+              onClick={() => handleLogin('admin')}
+              className="text-green-900 font-semibold hover:underline"
+            >
+              관리자 로그인
+            </button>
+          </p>
+
         </div>
       </div>
     </>
-  );
+  )
 }
 
 export default Auth;
