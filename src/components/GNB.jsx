@@ -9,14 +9,14 @@ function GNB() {
 
   const { user, setUser } = useUser() // 전역 user 상태 가져오기
 
-  // 💡 [핵심 수정] 혼자 로컬스토리지 보던 것을 전역 user 가 있냐 없냐(!!user)로 기준을 바꿉니다.
+
   const isLoggedIn = !!user 
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
-  // 1. 다른 탭에서 로그인/로그아웃 시 상태 동기화 (기존 유지)
+  // 1. 다른 탭에서 로그인/로그아웃 시 상태 동기화
   useEffect(() => {
     const checkLogin = () => {
-      // 로컬스토리지 찌꺼기가 만약 지워지면 전역 상태도 비워줌
+      // 로컬스토리지가 만약 지워지면 전역 상태도 비워줌
       if (!localStorage.getItem('accessToken')) {
         setUser(null)
       }
@@ -25,12 +25,12 @@ function GNB() {
     return () => window.removeEventListener('storage', checkLogin)
   }, [setUser])
 
-  // 2. 페이지(location) 변경 시마다 드롭다운 닫기 (기존 유지)
+  // 2. 페이지(location) 변경 시마다 드롭다운 닫기
   useEffect(() => {
     setDropdownOpen(false) 
   }, [location])
 
-  // 3. 드롭다운 바깥 영역 클릭 시 자동으로 드롭다운 닫기 (기존 유지)
+  // 3. 드롭다운 바깥 영역 클릭 시 자동으로 드롭다운 닫기
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -47,7 +47,7 @@ function GNB() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('loginType')
-    setUser(null) // 💡 [수정] 전역 상태를 null로 만들어 세션스토리지도 같이 비워지게 함
+    setUser(null)
     setDropdownOpen(false)
     navigate('/')
   }
@@ -68,7 +68,7 @@ function GNB() {
         ].map(({ path, label }) => (
           <Link
             key={path}
-            to={isLoggedIn ? path : '/auth'} // 💡 이제 isLoggedIn이 정확히 false가 되므로 /auth로 잘 이동합니다!
+            to={isLoggedIn ? path : '/auth'} 
             className={`text-base font-medium px-4 py-2 rounded-full transition-colors ${
               location.pathname === path
                 ? 'bg-green-900 text-white'
@@ -103,8 +103,9 @@ function GNB() {
                   <p className="text-xs text-gray-400">{user?.email}</p>
                 </div>
                 <div className="py-1">
-                  <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    내 프로필
+                  <button onClick={() => navigate('/profile')} 
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    프로필 관리
                   </button>
                   <button
                     onClick={handleLogout}

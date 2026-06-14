@@ -38,6 +38,9 @@ export const adminLogin = (code) => authFetch('/auth/admin/login', {
   body: JSON.stringify({ code })
 })
 
+// 회원 탈퇴
+export const withdrawUser = () => authFetch('/auth/withdraw', { method: 'DELETE' })
+
 // ── Admin Books ──────────────────────────────────────
 // epub 업로드
 export const uploadBook = async (file) => {

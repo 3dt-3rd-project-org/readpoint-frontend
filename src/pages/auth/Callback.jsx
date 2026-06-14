@@ -38,12 +38,15 @@ function Callback() {
           const cleanToken = data.token.replace('Bearer ', '')
           setToken(cleanToken)
           localStorage.setItem('accessToken', cleanToken)
-          setUser(data.user) 
+          setUser(data.user)
           const targetPath = loginType === 'admin' ? '/admin' : '/library'
           navigate(targetPath, { replace: true })
+        } else if (data.approved === false) {
+          // 관리자 승인 대기 중
+          navigate('/auth?pending=true', { replace: true })
         } else {
           navigate('/auth')
-          }
+        }
         })
         .catch(err => {
           if (!isMounted) return

@@ -61,9 +61,12 @@ function Graph() {
     if (!bookId || !cyRef.current) return
 
     let cancelled = false
-    const p = selectedEvent?.start_paragraph_order || 1
+    const p = selectedEvent?.start_paragraph_order || 9999
+    const c = selectedEvent ? selectedEvent.chapter_order + 45 : 100
+    console.log('selectedEvent:', selectedEvent)
+    console.log('c:', c, 'p:', p)
 
-    getBookRelations(bookId, currentChapter, p)
+    getBookRelations(bookId, c, p)
       .then(data => {
         if (cancelled) return
         if (!cyRef.current) return

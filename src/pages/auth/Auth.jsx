@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 function Auth() {
   const [tab, setTab] = useState('login');
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isPending = searchParams.get('pending') === 'true'
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
@@ -66,7 +68,12 @@ function Auth() {
               {tab === 'login' ? '다시 만나서 반가워요' : '독서 기록을 시작해볼까요'}
             </p>
           </div>
-
+          {isPending && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 mb-4 text-sm text-blue-700 text-center">
+              관리자 가입 승인 요청이 완료되었습니다.<br />
+              Teams 승인 완료 후 다시 로그인해 주세요.
+            </div>
+          )}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 px-8 py-10">
 
             {/* 탭 */}

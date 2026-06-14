@@ -10,6 +10,7 @@ import Spoiler from './pages/admin/Spoiler'
 import Review from './pages/admin/Review'
 import AdminLayout from './components/AdminLayout'
 import Callback from './pages/auth/Callback'
+import Profile from './pages/profile'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Route path="/viewer/:booksId" element={<Viewer />} />
         <Route path="/graph" element={<Graph />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/auth/callback" element={<Callback />} />
         <Route path="/admin" element={<AdminLayout><Dashboard /></AdminLayout>} />
         <Route path="/admin/review" element={<AdminLayout><Review /></AdminLayout>} />
