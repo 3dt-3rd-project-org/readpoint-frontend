@@ -152,16 +152,6 @@ function Library() {
                 />
               </>
             )}
-            <button
-              onClick={() => {
-                localStorage.removeItem('onboardingDone')
-                localStorage.removeItem('tooltipStep')
-                setTooltipStep(0)
-              }}
-              className="text-xs text-gray-300 hover:text-gray-500 transition-colors"
-            >
-              도움말
-            </button>
           </div>
         </div>
 
