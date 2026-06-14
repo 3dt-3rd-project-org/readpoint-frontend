@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview } from '../../api'
 
@@ -717,6 +718,7 @@ function StepSection({ step, index, status, data, onComplete, children }) {
 ============================================================ */
 
 function Review() {
+  const [searchParams] = useSearchParams()
   const [books, setBooks]               = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [stepStatus, setStepStatus]     = useState(initialStepStatus)
@@ -737,6 +739,14 @@ function Review() {
       .then(data => setBooks(data.books || []))
       .catch(err => console.error(err))
   }, [])
+
+  useEffect(() => {
+    const bookIdParam = searchParams.get('bookId')
+    if (bookIdParam && books.length > 0) {
+      const book = books.find(b => String(b.books_id) === String(bookIdParam))
+      if (book) handleBookSelect(book)
+    }
+  }, [books, searchParams])
 
   const handleComplete = async (stepKey, data) => {
     await submitStepData(bookId, stepKey, data)

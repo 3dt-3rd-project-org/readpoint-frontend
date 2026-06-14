@@ -1,9 +1,19 @@
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Shield, Network } from 'lucide-react'
 import heroImg from '../assets/hero.jpg'
+import { useEffect } from 'react'
+import { useUser } from '../context/UserContext'
 
 function Landing() {
+  const { user } = useUser()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (user) {
+      navigate('/library', { replace: true })
+    }
+  }, [user])
+
 
   return (
     <div className="min-h-screen">

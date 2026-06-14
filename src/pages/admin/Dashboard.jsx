@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { BarChart2, Bell, BookOpen, Upload, CheckCircle, XCircle, Loader } from 'lucide-react'
 import { connectWebSocket, disconnectWebSocket } from '../../websocket'
@@ -31,6 +32,7 @@ function formatMs(ms) {
 }
 
 function Dashboard() {
+  const navigate = useNavigate()
   const [books, setBooks] = useState([])
   const [logs, setLogs] = useState([])
   const [dragOver, setDragOver] = useState(false)
@@ -163,7 +165,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
-      text: `관리자가 요약 및 관계도 생성 파이프라인을 시작했습니다.`
+      text: `관리자가 2차 요약 파이프라인을 시작했습니다.`
     }, ...prev])
     try {
       await summarizeBook(bookId)
@@ -178,7 +180,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'success',
-      text: `관리자가 최종 요약을 승인하여 서비스를 배포했습니다!`
+      text: `관리자가 최종 분석 결과를 승인하여 서비스를 배포했습니다!`
     }, ...prev])
     try {
       await approveSummary(bookId)
@@ -199,9 +201,9 @@ function Dashboard() {
       if (!isActive) return
       const incomingStatus = (payload.status || '').toUpperCase()
       const DEFAULT_MESSAGES = {
-        'ANALYZING_FINISHED': '1차 본문 분석 파이프라인이 완료되었습니다! (검수 필요)',
+        'ANALYZING_FINISHED': '1차 분석 파이프라인이 완료되었습니다! (검수 필요)',
         'SUMMARIZING_COMPLETE': '요약 및 관계도 생성 파이프라인이 완료되었습니다! (최종 검수 필요)',
-        'ANALYZING_ERROR': '1차 본문 분석 중 오류가 발생했습니다.',
+        'ANALYZING_ERROR': '1차 분석 중 오류가 발생했습니다.',
         'SUMMARY_ERROR': '요약 생성 중 오류가 발생했습니다.',
         'METADATA_COMPLETE': `새 도서의 메타데이터 파싱 및 등록이 완료되었습니다. (Book ID: ${payload.book?.books_id || '알 수 없음'})`,
         'METADATA_ERROR': '도서 메타데이터 파싱 중 오류가 발생했습니다.'
@@ -371,7 +373,14 @@ function Dashboard() {
                 </span>
                 <span className="flex gap-2">
                   {book.status === 'READY' && <button onClick={() => handleAnalyze(currentId)} className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">1차 분석 시작</button>}
-                  {book.status === 'ANALYZING_FINISHED' && <button onClick={() => handleApproveAnalysis(currentId)} className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm">1차 검수 승인</button>}
+                  {book.status === 'ANALYZING_FINISHED' && (
+                    <button
+                      onClick={() => navigate(`/admin/review?bookId=${currentId}`)}
+                      className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm"
+                    >
+                      검수하기
+                    </button>
+                  )}
                   {book.status === 'ANALYZING_COMPLETE' && <button onClick={() => handleSummarize(currentId)} className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">요약 생성</button>}
                   {book.status === 'SUMMARIZING_COMPLETE' && <button onClick={() => handleApproveSummary(currentId)} className="px-4 py-1.5 bg-green-50 text-green-900 border border-green-300 text-xs font-semibold rounded-lg hover:bg-green-100 transition-colors shadow-sm">2차 검수 승인</button>}
                   {isError && <button onClick={() => handleRetry(currentId)} className="px-4 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-sm">재시도</button>}
