@@ -11,7 +11,7 @@ function Graph() {
   const cyRef = useRef(null)
   const cyInstance = useRef(null)
   const bookId = searchParams.get('bookId')
-
+  
   const [currentChapter, setCurrentChapter] = useState(1)
   const [maxChapter, setMaxChapter] = useState(8)
   const [selectedEvent, setSelectedEvent] = useState(null)
@@ -40,19 +40,24 @@ function Graph() {
   }, [bookId, books])
 
   useEffect(() => {
-  if (!bookId) return
-  getBookChapters(bookId).then(data => {
-    const chaps = data.chapters || []
-    setChapters(chaps)
-    setMaxChapter(chaps.length || 8)
-  })
-}, [bookId])
+    if (!bookId) return
+    getBookChapters(bookId).then(data => {
+      const chaps = data.chapters || []
+      setChapters(chaps)
+      setMaxChapter(chaps.length || 8)
+    })
+  }, [bookId])
 
   useEffect(() => {
     if (!bookId) return
     getBookEvents(bookId, currentChapter, 9999).then(data => {
-      setEvents((data.events || []).filter(e => e.chapter_order === currentChapter))
+      const filtered = (data.events || [])
+        .filter(e => e.chapter_order === currentChapter)
+        .sort((a, b) => a.event_order - b.event_order)
+        .map((ev, idx) => ({ ...ev, event_order: idx + 1 }))
+      setEvents(filtered)
     })
+    setSelectedNode(null) // 챕터 변경 시 인물 선택 초기화
     setSelectedEvent(null)
     setSearchTerm('')
   }, [bookId, currentChapter])
@@ -62,23 +67,44 @@ function Graph() {
 
     let cancelled = false
     const p = selectedEvent?.start_paragraph_order || 9999
-    const c = selectedEvent ? selectedEvent.chapter_order + 45 : 100
+    const c = selectedEvent ? selectedEvent.chapter_order : 100
     console.log('selectedEvent:', selectedEvent)
     console.log('c:', c, 'p:', p)
 
+    // 기존 인스턴스 확실히 정리
+    if (cyInstance.current) {
+      try {
+        cyInstance.current.removeAllListeners()
+        cyInstance.current.destroy()
+      } catch (e) {
+        console.warn("기존 인스턴스 파괴 중 경고:", e)
+      }
+      cyInstance.current = null
+    }
+
+    if (cyRef.current) {
+      cyRef.current.style.pointerEvents = 'none'
+    }
+    setGraphNodes([])
+
     getBookRelations(bookId, c, p)
       .then(data => {
-        if (cancelled) return
-        if (!cyRef.current) return
-
-        if (cyInstance.current) cyInstance.current.destroy()
+        console.log('data:', data)
+        if (cancelled || !cyRef.current) return
 
         const nodes = (data.nodes || []).map(n => ({
           data: { id: n.id, label: n.name, role: n.role }
         }))
         const edges = (data.edges || []).map(e => ({
-          data: { source: e.source, target: e.target, label: e.relation || e.type }
+          data: { source: e.source, target: e.target, label: e.type }
         }))
+
+        if (nodes.length === 0) {
+          if (cyRef.current) cyRef.current.style.pointerEvents = 'auto'
+          return
+        }
+
+        const mainChar = (data.nodes || []).find(n => n.role === '주인공')
 
         const cy = cytoscape({
           container: cyRef.current,
@@ -92,40 +118,90 @@ function Graph() {
                 'color': '#ffffff',
                 'text-valign': 'center',
                 'text-halign': 'center',
-                'font-size': '12px',
-                'width': '80px',
-                'height': '80px',
-                'cursor': 'pointer'
+                'font-size': '11px',
+                'width': '70px',
+                'height': '70px',
+                'text-wrap': 'wrap',
+                'text-max-width': '60px',
+                'border-width': 0,
+              }
+            },
+            {
+              selector: mainChar ? `node[id = "${mainChar.id}"]` : '',
+              style: {
+                'width': '90px',
+                'height': '90px',
+                'font-size': '13px',
+                'font-weight': 'bold',
+                'border-width': 3,
+                'border-color': '#4CAF7D',
+                'border-opacity': 0.8,
               }
             },
             {
               selector: 'edge',
               style: {
-                'width': 2,
+                'width': 1.5,
                 'line-color': '#4CAF7D',
                 'target-arrow-color': '#4CAF7D',
                 'target-arrow-shape': 'triangle',
                 'curve-style': 'bezier',
+                'control-point-step-size': 40,
                 'label': 'data(label)',
                 'font-size': '10px',
-                'color': '#767676',
+                'color': '#111111',
                 'text-background-color': '#ffffff',
-                'text-background-opacity': 1,
-                'text-background-padding': '2px',
+                'text-background-opacity': 0.7,  // 기본 숨김
+                'text-background-padding': '3px',
+                'text-background-shape': 'roundrectangle',
+                'opacity': 0.6,
               }
             },
             { selector: 'node:selected', style: { 'background-color': '#4CAF7D' } }
           ],
-          layout: { name: 'cose', padding: 50 }
+          layout: { 
+            name: 'concentric',
+            fit: true,
+            padding: 50,
+            minNodeSpacing: 60,
+            avoidOverlap: true,
+            concentric: function(node) {
+              return node.degree()
+            },
+            levelWidth: function(nodes) {
+              return 2
+            },
+            animate: false
+          }
+        })
+        
+        if (cyRef.current) cyRef.current.style.pointerEvents = 'auto'
+
+        cy.on('mouseover', 'node', function(e) {
+          const sel = e.target
+          cy.elements().style({ 'opacity': 0.1 })
+          sel.style('opacity', 1)
+          sel.connectedEdges().style({ 
+            'opacity': 1,
+            'text-background-opacity': 0.8
+          })
+          sel.connectedEdges().connectedNodes().style('opacity', 1)
         })
 
-        cy.on('tap', 'node', (evt) => {
-          const node = evt.target
-          setSelectedNode({
-            id: node.id(),
-            name: node.data('label'),
-            role: node.data('role')
+        cy.on('mouseout', 'node', function(e) {
+          cy.nodes().style('opacity', 1)
+          cy.edges().style({ 
+            'opacity': 0.3,
+            'text-background-opacity': 0
           })
+        })
+
+        // 노드에 마우스를 올렸을 때 마우스 커서 포인터 처리 (안전한 방식)
+        cy.on('mouseover', 'node', () => {
+          if (cyRef.current) cyRef.current.style.cursor = 'pointer'
+        })
+        cy.on('mouseout', 'node', () => {
+          if (cyRef.current) cyRef.current.style.cursor = 'default'
         })
 
         cyInstance.current = cy
@@ -139,14 +215,20 @@ function Graph() {
 
     return () => {
       cancelled = true
+      // 컴포넌트 언마운트 또는 의존성 변경 시 확실히 정리
+      if (cyRef.current) cyRef.current.style.cursor = 'default'
       if (cyInstance.current) {
-        cyInstance.current.removeAllListeners()
-        cyInstance.current.destroy()
+        try {
+          cyInstance.current.removeAllListeners()
+          cyInstance.current.destroy()
+        } catch (e) {
+          console.warn(e)
+        }
         cyInstance.current = null
       }
       setGraphNodes([])
     }
-  }, [bookId, currentChapter, selectedEvent, books])
+  }, [bookId, currentChapter, selectedEvent]) // books 의존성 배열에서 제외 (불필요한 리렌더링 방지)
 
   // 책 선택 화면
   if (!bookId) {
@@ -183,12 +265,10 @@ function Graph() {
   // 관계도 화면
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
-
       {/* 상단 컨트롤 */}
       {!controlsCollapsed && (
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 shrink-0">
           <div className="flex gap-6 h-40">
-
             {/* 챕터 선택 */}
             <div className="w-48 shrink-0 flex flex-col">
               <button
@@ -214,7 +294,6 @@ function Graph() {
           
             {/* 사건 검색 + 리스트 */}
             <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-gray-50 shadow-inner">
-
               {/* 선택된 사건 표시 */}
               {selectedEvent && (
                 <div className="px-3 py-1.5 bg-green-50 border-b border-green-100 flex items-center justify-between">
@@ -283,10 +362,10 @@ function Graph() {
                 </p>
               )}
             </div>
-
           </div>
         </div>
       )}
+      
       {/* 접기/펼치기 버튼 */}
       <div className="flex justify-end px-6 py-1 bg-white border-b border-gray-100">
         <button
@@ -298,8 +377,24 @@ function Graph() {
       </div>
 
       {/* 관계도 + 인물 패널 */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <div className="flex-1 bg-gray-50" ref={cyRef} />
+
+        {/* 줌 버튼 - cyRef 밖에 */}
+        <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
+          <button 
+            title="확대"
+            onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 1.2)}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center font-bold">+</button>
+          <button 
+            title="축소"
+            onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 0.8)}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center font-bold">−</button>
+          <button 
+            title="중심 맞추기"
+            onClick={() => cyInstance.current?.fit()}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center text-xs">⊙</button>
+        </div>
 
         {/* 인물 정보 패널 */}
         <div className="w-72 border-l border-gray-200 bg-white overflow-y-auto z-10">
@@ -327,18 +422,24 @@ function Graph() {
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">
-                {graphNodes.map(char => (
-                  <div
-                    key={char.id}
-                    onClick={() => setSelectedNode(char)}
-                    className="flex flex-col items-center cursor-pointer hover:opacity-70 transition-opacity"
-                  >
-                    <div className="w-10 h-10 bg-green-900 rounded-full flex items-center justify-center text-white text-sm font-bold mb-1 shadow-sm">
-                      {char.name?.[0] || char.id?.[0]}
+                {graphNodes.length > 0 ? (
+                  graphNodes.map(char => (
+                    <div
+                      key={char.id}
+                      onClick={() => setSelectedNode(char)}
+                      className="flex flex-col items-center cursor-pointer hover:opacity-70 transition-opacity"
+                    >
+                      <div className="w-10 h-10 bg-green-900 rounded-full flex items-center justify-center text-white text-sm font-bold mb-1 shadow-sm">
+                        {char.name?.[0] || char.id?.[0]}
+                      </div>
+                      <span className="text-xs text-gray-600 text-center truncate w-full">{char.name}</span>
                     </div>
-                    <span className="text-xs text-gray-600 text-center truncate w-full">{char.name}</span>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center text-sm text-gray-400 mt-4">
+                    데이터가 없습니다.
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
