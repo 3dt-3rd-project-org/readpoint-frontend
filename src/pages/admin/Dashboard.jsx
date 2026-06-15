@@ -384,7 +384,7 @@ function Dashboard() {
                   {book.status === 'ANALYZING_COMPLETE' && <button onClick={() => handleSummarize(currentId)} className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">요약 생성</button>}
                   {book.status === 'SUMMARIZING_COMPLETE' && (
                       <button
-                        onClick={() => navigate(`/admin/review?bookId=${currentId}`)}
+                        onClick={() => navigate(`/admin/summary?bookId=${currentId}`)}
                         className="px-4 py-1.5 bg-blue-50 text-blue-900 border border-blue-300 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
                       >
                         2차 검수하기

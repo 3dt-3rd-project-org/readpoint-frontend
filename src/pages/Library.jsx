@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, Search, Network, MapPin, FileText, ChevronRight } from 'lucide-react'
-import { getBooks } from '../api'
+import { getBooks, getAllBooks } from '../api'
 
 const TOOLTIP_STEPS = [
   {
@@ -43,6 +43,7 @@ function Library() {
   const [books, setBooks] = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [allBooks, setAllBooks] = useState([])
   const [tab, setTab] = useState('shelf')
   const [searchTerm, setSearchTerm] = useState('')
   const [searchType, setSearchType] = useState('title')
@@ -52,6 +53,10 @@ function Library() {
     return saved !== null ? parseInt(saved) : null
   })
   const navigate = useNavigate()
+
+  useEffect(() => {
+    getAllBooks().then(data => setAllBooks(data.books || []))
+  }, [])
 
   useEffect(() => {
     getBooks()
@@ -92,7 +97,7 @@ function Library() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [])
 
-  const filteredBooks = books.filter(book => {
+  const filteredBooks = allBooks.filter(book => {
     if (!searchTerm) return true
     if (searchType === 'title') return book.title?.toLowerCase().includes(searchTerm.toLowerCase())
     if (searchType === 'author') return book.author?.toLowerCase().includes(searchTerm.toLowerCase())

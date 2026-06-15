@@ -96,6 +96,10 @@ export const getBookSummaryForReview = (bookId) => authFetch(`/adm/books/${bookI
 // 사용자 책 목록
 export const getBooks = () => authFetch('/books')
 
+export const getAllBooks = () => fetch(`${BASE_URL}/books`, {
+  headers: { 'Content-Type': 'application/json' }
+}).then(res => res.json())
+
 // 책 상세
 export const getBookById = (bookId) => authFetch(`/books/${bookId}`)
 
