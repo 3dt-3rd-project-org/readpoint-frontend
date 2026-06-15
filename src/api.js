@@ -114,10 +114,13 @@ export const getBookEvents = (bookId, chapter, p) =>
 export const getBookRelations = (bookId, chapter, p = 1) => 
   authFetch(`/books/${bookId}/relations?c=${chapter}&p=${p}`)
 
+//북마크 조회
+export const getBookmarkByUserId = (bookId) => authFetch(`/books/${bookId}/progress`)
+
 // 북마크 저장
-export const saveBookmarkByUserId = (bookId, chapter, progress) => authFetch(`/users/bookmarks`, {
+export const saveBookmarkByUserId = (bookId, chapter, progress) => authFetch(`/books/${bookId}/progress`, {
   method: 'POST',
-  body: JSON.stringify({ bookId, chapter, progress })
+  body: JSON.stringify({ chapter_order: chapter, paragraph_order: progress })
 })
 
 // 줄거리 요약 가져오기

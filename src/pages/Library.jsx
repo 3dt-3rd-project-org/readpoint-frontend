@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, Search, Network, MapPin, FileText, ChevronRight } from 'lucide-react'
-import { getBooks, getAllBooks } from '../api'
+import { getBooks, getAllBooks, getBookChapters  } from '../api'
 
 const TOOLTIP_STEPS = [
   {
@@ -59,16 +59,34 @@ function Library() {
   }, [])
 
   useEffect(() => {
-    getBooks()
-      .then(data => {
-        setBooks(data.books || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
-  }, [])
+  getBooks()
+    .then(async data => {
+      const bookList = data.books || []
+
+      const booksWithProgress = await Promise.all(
+        bookList.map(async book => {
+          try {
+            const chaptersData = await getBookChapters(book.books_id)
+            const totalChapters = chaptersData.chapters?.length || 1
+            const progress = book.last_read_chapter_order
+              ? Math.round((book.last_read_chapter_order / totalChapters) * 100)
+              : 0
+            return { ...book, progress }
+          } catch {
+            return { ...book, progress: 0 }
+          }
+        })
+      )
+
+      setBooks(booksWithProgress)
+      setLoading(false)
+    })
+    .catch(err => {
+      console.error(err)
+      setLoading(false)
+    })
+}, [])
+
 
   const handleTooltipNext = () => {
     if (tooltipStep >= TOOLTIP_STEPS.length + 1) {
@@ -262,12 +280,17 @@ function Library() {
                   <p className="text-sm text-gray-700 leading-relaxed">{selectedBook.summary || '요약 정보가 없습니다.'}</p>
                 </div>
                 <div className="flex gap-3 mb-3">
-                  <button
-                    onClick={() => navigate(`/viewer/${selectedBook.books_id}`, { state: { book: selectedBook } })}
-                    className="flex-1 bg-green-900 text-white rounded-full py-3 font-semibold hover:bg-green-800 transition-colors"
-                  >
-                    이어읽기
-                  </button>
+                    <button
+                      onClick={() => navigate(`/viewer/${selectedBook.books_id}`, { 
+                        state: { 
+                          book: selectedBook,
+                          resumeChapterOrder: selectedBook.last_read_chapter_order
+                        } 
+                      })}
+                      className="flex-1 bg-green-900 text-white rounded-full py-3 font-semibold hover:bg-green-800 transition-colors"
+                    >
+                      이어읽기
+                    </button>
                   <button
                     onClick={() => navigate(`/viewer/${selectedBook.books_id}`)}
                     className="flex-1 bg-gray-100 text-gray-500 rounded-full py-3 hover:bg-gray-200 transition-colors"
