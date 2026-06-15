@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useUser } from '../../context/UserContext'
 
 function Auth() {
+  const { user } = useUser()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isPending = searchParams.get('pending') === 'true'
@@ -10,13 +12,29 @@ function Auth() {
 
   const alreadyAgreed = localStorage.getItem('privacyAgreed') === 'true'
 
+  // useEffect(() => {
+  //   const token = localStorage.getItem('accessToken')
+  //   const role = localStorage.getItem('role')
+  //   if (token) {
+  //     navigate(role === 'ADMIN' ? '/admin' : '/library', { replace: true })
+  //   }
+  // }, [])
+
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
-    const role = localStorage.getItem('role')
-    if (token) {
-      navigate(role === 'ADMIN' ? '/admin' : '/library', { replace: true })
+  const token = localStorage.getItem('accessToken')
+  
+  // 1. 토큰도 있고, Context에 유저 정보도 확실히 들어왔을 때만 실행합니다.
+  if (token && user) {
+    // 2. localStorage보다는 Context에 있는 유저 권한을 보는 게 가장 정확합니다.
+    const userRole = user.loginType || localStorage.getItem('role')
+    
+    if (userRole === 'ADMIN') {
+      navigate('/admin', { replace: true })
+    } else {
+      navigate('/library', { replace: true })
     }
-  }, [])
+  }
+}, [user, navigate]) // 💡 중요: user 상태가 바뀔 때마다 다시 검사하도록 등록!
 
   // 동의 후 구글 로그인 진행
   useEffect(() => {

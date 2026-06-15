@@ -78,6 +78,7 @@ function GNB() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('loginType')
+    sessionStorage.removeItem('u_session')
     setUser(null)
     setDropdownOpen(false)
     navigate('/')
