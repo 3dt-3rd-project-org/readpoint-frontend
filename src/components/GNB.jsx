@@ -38,6 +38,13 @@ function GNB() {
     const next = (tooltipStep ?? 0) + 1
     localStorage.setItem('tooltipStep', next)
     setTooltipStep(next)
+    if (next === 2) {
+      if (location.pathname === '/library') {
+        window.dispatchEvent(new CustomEvent('tooltipStepChange', { detail: 2 }))
+      } else {
+        navigate('/library')
+      }
+    }
   }
 
   const handleTooltipSkip = () => {
@@ -79,7 +86,7 @@ function GNB() {
   const menus = [
     { path: '/library', label: '서재', tooltipIndex: 0, icon: <BookOpen size={13} />, tooltipMsg: '서재에서 책을 선택해 읽어보세요' },
     { path: '/graph', label: '관계도', tooltipIndex: 1, icon: <Network size={13} />, tooltipMsg: '인물 관계도를 챕터별로 볼 수 있어요' },
-    ...(user?.loginType === 'ADMIN' ? [{ path: '/admin', label: '관리', tooltipIndex: null, icon: null, tooltipMsg: null }] : []),
+    ...(localStorage.getItem('loginType') === 'admin' ? [{ path: '/admin', label: '관리', tooltipIndex: null, icon: null, tooltipMsg: null }] : []),
   ]
 
   return (

@@ -91,12 +91,19 @@ function Library() {
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
   }, [])
+
   const filteredBooks = books.filter(book => {
     if (!searchTerm) return true
     if (searchType === 'title') return book.title?.toLowerCase().includes(searchTerm.toLowerCase())
     if (searchType === 'author') return book.author?.toLowerCase().includes(searchTerm.toLowerCase())
     return true
   })
+
+  useEffect(() => {
+    const handler = (e) => setTooltipStep(e.detail)
+    window.addEventListener('tooltipStepChange', handler)
+    return () => window.removeEventListener('tooltipStepChange', handler)
+  }, [])
 
   if (loading) return <div className="p-10 text-gray-400 text-center">로딩 중...</div>
 
