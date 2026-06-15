@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, Search, Network, MapPin, FileText, ChevronRight } from 'lucide-react'
-import { getBooks, getAllBooks, getBookChapters  } from '../api'
+import { getBooks, getAllBooks, getBookChapters, getSummaryByUserId  } from '../api'
 
 const TOOLTIP_STEPS = [
   {
@@ -52,6 +52,8 @@ function Library() {
     const saved = localStorage.getItem('tooltipStep')
     return saved !== null ? parseInt(saved) : null
   })
+  const [summary, setSummary] = useState(null)
+
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -86,6 +88,17 @@ function Library() {
       setLoading(false)
     })
 }, [])
+
+useEffect(() => {
+  if (!selectedBook) return
+  getSummaryByUserId(
+    selectedBook.books_id,
+    selectedBook.last_read_chapter_id,
+    selectedBook.last_read_paragraph_id
+  )
+    .then(data => setSummary(data.summary || '요약 정보가 없습니다.'))
+    .catch(() => setSummary('요약 정보가 없습니다.'))
+}, [selectedBook])
 
 
   const handleTooltipNext = () => {
@@ -277,7 +290,7 @@ function Library() {
                   <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
                     <FileText size={12} /> 줄거리 요약
                   </p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{selectedBook.summary || '요약 정보가 없습니다.'}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{summary || '요약 정보가 없습니다.'}</p>
                 </div>
                 <div className="flex gap-3 mb-3">
                     <button
