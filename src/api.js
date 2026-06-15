@@ -89,6 +89,9 @@ export const approveAnalysisForReview = (bookId, data) => authFetch(`/adm/books/
   body: JSON.stringify(data)
 })
 
+// 책 검수 - 줄거리 요약 리스트 가져오기
+export const getBookSummaryForReview = (bookId) => authFetch(`/adm/books/${bookId}/summary`)
+
 // ── Reader Books ─────────────────────────────────────
 // 사용자 책 목록
 export const getBooks = () => authFetch('/books')
@@ -106,6 +109,15 @@ export const getBookEvents = (bookId, chapter, p) =>
 // 인물 관계도
 export const getBookRelations = (bookId, chapter, p = 1) => 
   authFetch(`/books/${bookId}/relations?c=${chapter}&p=${p}`)
+
+// 북마크 저장
+export const saveBookmarkByUserId = (bookId, chapter, progress) => authFetch(`/users/bookmarks`, {
+  method: 'POST',
+  body: JSON.stringify({ bookId, chapter, progress })
+})
+
+// 줄거리 요약 가져오기
+export const getSummaryByUserId = (bookId, chapter, p) => authFetch(`/books/${bookId}/summary?c=${chapter}&p=${p}`)
 
 // ── WebPubSub ─────────────────────────────────
 // 웹소켓 토큰

@@ -11,6 +11,7 @@ import Review from './pages/admin/Review'
 import AdminLayout from './components/AdminLayout'
 import Callback from './pages/auth/Callback'
 import Profile from './pages/profile'
+import Summary from './pages/admin/Summary'
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout><Dashboard /></AdminLayout>} />
         <Route path="/admin/review" element={<AdminLayout><Review /></AdminLayout>} />
         <Route path="/admin/spoiler" element={<AdminLayout><Spoiler /></AdminLayout>} />
+        <Route path="/admin/summary" element={<AdminLayout><Summary /></AdminLayout>} />
         <Route path="/admin/settings" element={<AdminLayout><div className="p-8"><h1 className="text-xl font-bold">설정</h1></div></AdminLayout>} />
       </Routes>
     </BrowserRouter>
