@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ePub from 'epubjs'
-import { Users, Network, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Network, ChevronLeft } from 'lucide-react'
 import { getBookById, getBookRelations, getBookChapters } from '../../api'
 
 function Viewer() {
@@ -10,6 +10,10 @@ function Viewer() {
   const viewerRef = useRef(null)
   const renditionRef = useRef(null)
   const bookRef = useRef(null)
+  const tocRef = useRef([])
+  const chaptersRef = useRef([])
+  const lastProgress = useRef(null)
+
   const [toc, setToc] = useState([])
   const [currentHref, setCurrentHref] = useState('')
   const [showPersonPanel, setShowPersonPanel] = useState(false)
@@ -18,22 +22,21 @@ function Viewer() {
   const [persons, setPersons] = useState([])
   const [currentP, setCurrentP] = useState(0)
   const [chapters, setChapters] = useState([])
-  
+  const [showFontPanel, setShowFontPanel] = useState(false)
+  const [fontSize, setFontSize] = useState(100)
+
   const getHrefByTitle = (title) => {
     const found = toc.find(item =>
       item.label.includes(title) || title.includes(item.label)
     )
     return found?.href
   }
-  const [showFontPanel, setShowFontPanel] = useState(false)
-  const [fontSize, setFontSize] = useState(100)
 
   const changeFontSize = (delta) => {
     const newSize = Math.min(150, Math.max(70, fontSize + delta))
     setFontSize(newSize)
     renditionRef.current?.themes.fontSize(`${newSize}%`)
   }
-
 
   // 책 정보 가져오기
   useEffect(() => {
@@ -50,10 +53,24 @@ function Viewer() {
       .catch(err => console.error(err))
   }, [booksId, currentP])
 
+  // 챕터 가져오기
   useEffect(() => {
     getBookChapters(booksId)
-      .then(data => setChapters(data.chapters || []))
+      .then(data => {
+        setChapters(data.chapters || [])
+        chaptersRef.current = data.chapters || []
+      })
       .catch(err => console.error(err))
+  }, [booksId])
+
+  // 페이지 떠날 때 마지막 위치 저장
+  useEffect(() => {
+    return () => {
+      if (lastProgress.current) {
+        console.log('📤 페이지 떠날 때 저장:', lastProgress.current)
+        // TODO: saveProgress(booksId, lastProgress.current)
+      }
+    }
   }, [booksId])
 
   // epub 렌더링
@@ -66,8 +83,8 @@ function Viewer() {
     const rendition = book.renderTo(viewerRef.current, {
       width: '100%',
       height: '100%',
-      flow: 'scrolled', // 스크롤 방식
-      manager: 'continuous', // 다음 챕터도 세로로 연속해서 렌더링
+      flow: 'scrolled',
+      manager: 'continuous',
       allowScriptedContent: true
     })
 
@@ -76,16 +93,46 @@ function Viewer() {
 
     book.loaded.navigation.then(nav => {
       setToc(nav.toc)
+      tocRef.current = nav.toc
     })
 
     let debounceTimer
     rendition.on('locationChanged', (location) => {
       setCurrentHref(location.start.href)
+
+      const cfi = location.start
+      const currentSection = bookRef.current?.spine.get(cfi)
+      const currentHrefValue = currentSection?.href
+
+      const flatToc = tocRef.current.flatMap(item => item.subitems?.length ? item.subitems : [item])
+      const tocIndex = flatToc.findIndex(item =>
+        item.href?.includes(currentHrefValue) || currentHrefValue?.includes(item.href)
+      )
+
+      const sortedChapters = [...chaptersRef.current].sort((a, b) => a.chapter_order - b.chapter_order)
+      const chapter = tocIndex === -1 ? sortedChapters[0] : sortedChapters[tocIndex]
+
+      const paragraphMatch = cfi.match(/!\/4\/(\d+)/)
+      const paragraph = paragraphMatch ? parseInt(paragraphMatch[1]) / 2 : 0
+
+      // lastProgress 업데이트
+      lastProgress.current = {
+        cfi,
+        chapter_id: chapter?.chapter_id,
+        chapter_order: chapter?.chapter_order,
+        paragraph,
+      }
+
+      console.log('📍 현재 위치:', lastProgress.current)
+
       clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
         const p = location.start.displayed?.page || 0
         setCurrentP(p)
-      }, 1000)
+        // 5초 이상 머물렀을 때 저장
+        console.log('💾 자동 저장:', lastProgress.current)
+        // TODO: saveProgress(booksId, lastProgress.current)
+      }, 5000)
     })
 
     return () => {
@@ -115,33 +162,31 @@ function Viewer() {
                 }}
                 className="w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 text-gray-600"
               >
-              {chapter.title}
-            </button>
-          ))
-        ) : (
-        toc.map((item, i) => (
-          <button
-            key={i}
-            onClick={() => goToChapter(item.href)}
-            className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
-              currentHref === item.href
-                ? 'bg-green-100 text-green-900 font-semibold'
-                : 'text-gray-600'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))
-      )}
-    </div>
-  </div>
-      
+                {chapter.title}
+              </button>
+            ))
+          ) : (
+            toc.map((item, i) => (
+              <button
+                key={i}
+                onClick={() => goToChapter(item.href)}
+                className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
+                  currentHref === item.href
+                    ? 'bg-green-100 text-green-900 font-semibold'
+                    : 'text-gray-600'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* 본문 */}
       <div className="flex-1 flex flex-col">
         {/* 상단 바 */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
-          {/* 왼쪽 */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/library')}
@@ -152,12 +197,9 @@ function Viewer() {
             </button>
           </div>
 
-          {/* 가운데 */}
           <p className="text-sm text-gray-500 font-medium">{bookInfo?.title || '로딩 중...'}</p>
 
-          {/* 오른쪽 */}
           <div className="flex items-center gap-4">
-            {/* Aa 버튼 */}
             <div className="relative">
               <button
                 onClick={() => setShowFontPanel(!showFontPanel)}
@@ -201,12 +243,13 @@ function Viewer() {
             <button
               onClick={() => navigate(`/graph?bookId=${booksId}`)}
               className="text-sm text-gray-500 font-semibold flex items-center gap-1 hover:text-green-900 transition-colors"
-              >
+            >
               <Network size={16} />
               관계도
             </button>
           </div>
         </div>
+
         {/* epub 렌더링 영역 */}
         <div className="flex flex-1 overflow-hidden">
           <div ref={viewerRef} className="flex-1 overflow-y-auto h-full" />

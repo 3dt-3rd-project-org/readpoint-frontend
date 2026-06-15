@@ -7,6 +7,7 @@ function AdminLayout({ children }) {
   const menus = [
     { path: '/admin', label: '대시보드', icon: <LayoutDashboard size={18} /> },
     { path: '/admin/review', label: '검수', icon: <Search size={18} /> },
+    { path: '/admin/summary', label: '요약검수', icon: <Search size={18} /> },
   ]
 
   return (
