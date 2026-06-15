@@ -12,6 +12,7 @@ function Graph() {
   const cyRef = useRef(null)
   const cyInstance = useRef(null)
   const bookId = searchParams.get('bookId')
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
 
   const [isDirty, setIsDirty] = useState(false)
   const [currentChapter, setCurrentChapter] = useState(1)
@@ -231,6 +232,7 @@ function Graph() {
         // 노드 드래그 시 미저장 상태 표시
         cy.on('dragfree', 'node', () => setIsDirty(true))
 
+
         // 저장된 노드 위치 복원
         const savedPositions = localStorage.getItem(`graph-positions-${bookId}-${c}-${p}`)
         if (savedPositions) {
@@ -390,7 +392,12 @@ function Graph() {
                   </span>
                   <h3 className="text-sm font-bold text-gray-900 mb-2">{selectedEvent.short_title}</h3>
                   {selectedEvent.summary && (
-                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{selectedEvent.summary}</p>
+                    <p
+                      onClick={() => setSummaryExpanded(v => !v)}
+                      className={`text-xs text-gray-500 leading-relaxed cursor-pointer ${summaryExpanded ? '' : 'line-clamp-2'}`}
+                    >
+                      {selectedEvent.summary}
+                    </p>
                   )}
                 </>
               ) : (
