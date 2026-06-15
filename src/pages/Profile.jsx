@@ -7,18 +7,6 @@ function Profile() {
   const { user, setUser } = useUser()
   const navigate = useNavigate()
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false)
-  const [nickname, setNickname] = useState(user?.nickname || '')
-  const [previewUrl, setPreviewUrl] = useState(null)
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    setPreviewUrl(URL.createObjectURL(file))
-  }
-
-  const handleNicknameUpdate = async () => {
-    alert('닉네임 변경 API 연동 예정입니다.')
-  }
 
   const handleWithdraw = async () => {
     try {
@@ -43,35 +31,15 @@ function Profile() {
 
       {/* 상단 프로필 */}
       <div className="flex flex-col items-center mb-10">
-        <div className="w-24 h-24 bg-green-900 rounded-full flex items-center justify-center text-white text-3xl font-bold mb-3 overflow-hidden">
-          {previewUrl
-            ? <img src={previewUrl} alt="프로필" className="w-full h-full object-cover" />
-            : user?.nickname?.[0] || '?'
-          }
+        <div className="w-24 h-24 bg-green-900 rounded-full flex items-center justify-center text-white text-3xl font-bold">
+          {user?.nickname?.[0] || '?'}
         </div>
-        <label className="text-xs text-gray-400 cursor-pointer hover:text-green-700 transition-colors">
-          사진 변경
-          <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-        </label>
       </div>
 
       {/* 닉네임 */}
       <div className="mb-6">
         <p className="text-xs font-semibold text-gray-400 mb-2">닉네임</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-green-700"
-          />
-          <button
-            onClick={handleNicknameUpdate}
-            className="px-4 py-2 bg-green-900 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors"
-          >
-            변경
-          </button>
-        </div>
+        <p className="text-sm text-gray-700">{user?.nickname || '닉네임 없음'}</p>
       </div>
 
       {/* 이메일 */}
