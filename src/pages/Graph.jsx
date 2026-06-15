@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import cytoscape from 'cytoscape'
+import { Plus, Minus, Maximize2, Save } from 'lucide-react'
 import { getBooks, getBookRelations, getBookChapters, getBookEvents } from '../api'
 
 function Graph() {
@@ -11,9 +12,9 @@ function Graph() {
   const cyRef = useRef(null)
   const cyInstance = useRef(null)
   const bookId = searchParams.get('bookId')
-  
+
+  const [isDirty, setIsDirty] = useState(false)
   const [currentChapter, setCurrentChapter] = useState(1)
-  const [maxChapter, setMaxChapter] = useState(8)
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [graphNodes, setGraphNodes] = useState([])
@@ -21,75 +22,97 @@ function Graph() {
   const [chapters, setChapters] = useState([])
   const [events, setEvents] = useState([])
 
-  const currentEvents = events
-  const filteredEvents = currentEvents.filter(ev =>
+  // 사건 검색 필터 (프론트 필터링)
+  const filteredEvents = events.filter(ev =>
     ev.short_title.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // 챕터 변경 - 미저장 변경사항 확인
+  const handleChapterChange = (val) => {
+    if (isDirty && !window.confirm('저장하지 않은 변경사항이 있어요. 이동하시겠어요?')) return
+    setIsDirty(false)
+    setCurrentChapter(val)
+  }
+
+  // 사건 선택/해제 - 미저장 변경사항 확인
+  const handleEventSelect = (ev) => {
+    if (isDirty && !window.confirm('저장하지 않은 변경사항이 있어요. 이동하시겠어요?')) return
+    setIsDirty(false)
+    setSelectedEvent(selectedEvent?.event_id === ev.event_id ? null : ev)
+  }
+
+  // 노드 위치 localStorage 저장
+  const handleSavePositions = () => {
+    if (!cyInstance.current) return
+    const positions = {}
+    cyInstance.current.nodes().forEach(n => {
+      positions[n.id()] = n.position()
+    })
+    const p = selectedEvent?.start_paragraph_order || 9999
+    const c = selectedEvent ? selectedEvent.chapter_order : 100
+    localStorage.setItem(`graph-positions-${bookId}-${c}-${p}`, JSON.stringify(positions))
+    setIsDirty(false)
+  }
+
+  // 전체 책 목록 조회
   useEffect(() => {
     getBooks().then(data => setBooks(data.books || []))
   }, [])
 
+  // 책 제목 설정
   useEffect(() => {
     if (!bookId) return
     const selectedBook = books.find(b => String(b.books_id) === String(bookId))
-    if (selectedBook) {
-      setBookTitle(selectedBook.title)
-      setMaxChapter(selectedBook.chapter_count || 8)
-    }
+    if (selectedBook) setBookTitle(selectedBook.title)
   }, [bookId, books])
 
+  // 챕터 목록 조회
   useEffect(() => {
     if (!bookId) return
     getBookChapters(bookId).then(data => {
-      const chaps = data.chapters || []
-      setChapters(chaps)
-      setMaxChapter(chaps.length || 8)
+      setChapters(data.chapters || [])
     })
   }, [bookId])
 
+  // 사건 목록 조회 - 챕터 변경 시 초기화
   useEffect(() => {
     if (!bookId) return
     getBookEvents(bookId, currentChapter, 9999).then(data => {
       const filtered = (data.events || [])
         .filter(e => e.chapter_order === currentChapter)
         .sort((a, b) => a.event_order - b.event_order)
-        .map((ev, idx) => ({ ...ev, event_order: idx + 1 }))
+        .map((ev, idx) => ({ ...ev, event_order: idx + 1 })) // 1부터 재번호매김
       setEvents(filtered)
     })
-    setSelectedNode(null) // 챕터 변경 시 인물 선택 초기화
+    setSelectedNode(null)
     setSelectedEvent(null)
     setSearchTerm('')
   }, [bookId, currentChapter])
 
+  // 관계도 그래프 렌더링
   useEffect(() => {
     if (!bookId || !cyRef.current) return
 
     let cancelled = false
     const p = selectedEvent?.start_paragraph_order || 9999
     const c = selectedEvent ? selectedEvent.chapter_order : 100
-    console.log('selectedEvent:', selectedEvent)
-    console.log('c:', c, 'p:', p)
 
-    // 기존 인스턴스 확실히 정리
+    // 기존 인스턴스 정리
     if (cyInstance.current) {
       try {
         cyInstance.current.removeAllListeners()
         cyInstance.current.destroy()
       } catch (e) {
-        console.warn("기존 인스턴스 파괴 중 경고:", e)
+        console.warn('기존 인스턴스 파괴 중 경고:', e)
       }
       cyInstance.current = null
     }
 
-    if (cyRef.current) {
-      cyRef.current.style.pointerEvents = 'none'
-    }
+    if (cyRef.current) cyRef.current.style.pointerEvents = 'none'
     setGraphNodes([])
 
     getBookRelations(bookId, c, p)
       .then(data => {
-        console.log('data:', data)
         if (cancelled || !cyRef.current) return
 
         const nodes = (data.nodes || []).map(n => ({
@@ -99,17 +122,20 @@ function Graph() {
           data: { source: e.source, target: e.target, label: e.type }
         }))
 
+        // 노드 없으면 렌더링 중단
         if (nodes.length === 0) {
           if (cyRef.current) cyRef.current.style.pointerEvents = 'auto'
           return
         }
 
+        // 주인공 노드 강조용
         const mainChar = (data.nodes || []).find(n => n.role === '주인공')
 
         const cy = cytoscape({
           container: cyRef.current,
           elements: [...nodes, ...edges],
           style: [
+            // 기본 노드 스타일
             {
               selector: 'node',
               style: {
@@ -126,6 +152,7 @@ function Graph() {
                 'border-width': 0,
               }
             },
+            // 주인공 노드 강조 (테두리)
             {
               selector: mainChar ? `node[id = "${mainChar.id}"]` : '',
               style: {
@@ -138,6 +165,7 @@ function Graph() {
                 'border-opacity': 0.8,
               }
             },
+            // 엣지 스타일 - 기본은 흐리게, hover 시 라벨 표시
             {
               selector: 'edge',
               style: {
@@ -151,7 +179,7 @@ function Graph() {
                 'font-size': '10px',
                 'color': '#111111',
                 'text-background-color': '#ffffff',
-                'text-background-opacity': 0.7,  // 기본 숨김
+                'text-background-opacity': 0,
                 'text-background-padding': '3px',
                 'text-background-shape': 'roundrectangle',
                 'opacity': 0.6,
@@ -159,50 +187,59 @@ function Graph() {
             },
             { selector: 'node:selected', style: { 'background-color': '#4CAF7D' } }
           ],
-          layout: { 
+          // 동심원 레이아웃 - 연결 많은 노드가 중심
+          layout: {
             name: 'concentric',
             fit: true,
             padding: 50,
             minNodeSpacing: 60,
             avoidOverlap: true,
-            concentric: function(node) {
-              return node.degree()
-            },
-            levelWidth: function(nodes) {
-              return 2
-            },
+            concentric: (node) => node.degree(),
+            levelWidth: () => 2,
             animate: false
           }
         })
-        
+
         if (cyRef.current) cyRef.current.style.pointerEvents = 'auto'
 
+        // hover 시 연결된 노드/엣지만 강조 (포커스 & 딤 효과)
         cy.on('mouseover', 'node', function(e) {
           const sel = e.target
           cy.elements().style({ 'opacity': 0.1 })
           sel.style('opacity', 1)
-          sel.connectedEdges().style({ 
-            'opacity': 1,
-            'text-background-opacity': 0.8
-          })
+          sel.connectedEdges().style({ 'opacity': 1, 'text-background-opacity': 0.8 })
           sel.connectedEdges().connectedNodes().style('opacity', 1)
-        })
-
-        cy.on('mouseout', 'node', function(e) {
-          cy.nodes().style('opacity', 1)
-          cy.edges().style({ 
-            'opacity': 0.3,
-            'text-background-opacity': 0
-          })
-        })
-
-        // 노드에 마우스를 올렸을 때 마우스 커서 포인터 처리 (안전한 방식)
-        cy.on('mouseover', 'node', () => {
           if (cyRef.current) cyRef.current.style.cursor = 'pointer'
         })
-        cy.on('mouseout', 'node', () => {
+
+        cy.on('mouseout', 'node', function() {
+          cy.nodes().style('opacity', 1)
+          cy.edges().style({ 'opacity': 0.6, 'text-background-opacity': 0 })
           if (cyRef.current) cyRef.current.style.cursor = 'default'
         })
+
+        // 노드 클릭 시 인물 정보 패널 표시
+        cy.on('tap', 'node', (evt) => {
+          const node = evt.target
+          setSelectedNode({
+            id: node.id(),
+            name: node.data('label'),
+            role: node.data('role')
+          })
+        })
+
+        // 노드 드래그 시 미저장 상태 표시
+        cy.on('dragfree', 'node', () => setIsDirty(true))
+
+        // 저장된 노드 위치 복원
+        const savedPositions = localStorage.getItem(`graph-positions-${bookId}-${c}-${p}`)
+        if (savedPositions) {
+          const positions = JSON.parse(savedPositions)
+          cy.nodes().forEach(n => {
+            if (positions[n.id()]) n.position(positions[n.id()])
+          })
+          cy.fit()
+        }
 
         cyInstance.current = cy
         setGraphNodes(cy.nodes().map(n => ({
@@ -213,9 +250,9 @@ function Graph() {
       })
       .catch(err => console.error(err))
 
+    // cleanup - 언마운트 또는 의존성 변경 시 인스턴스 정리
     return () => {
       cancelled = true
-      // 컴포넌트 언마운트 또는 의존성 변경 시 확실히 정리
       if (cyRef.current) cyRef.current.style.cursor = 'default'
       if (cyInstance.current) {
         try {
@@ -228,7 +265,7 @@ function Graph() {
       }
       setGraphNodes([])
     }
-  }, [bookId, currentChapter, selectedEvent]) // books 의존성 배열에서 제외 (불필요한 리렌더링 방지)
+  }, [bookId, currentChapter, selectedEvent])
 
   // 책 선택 화면
   if (!bookId) {
@@ -265,10 +302,12 @@ function Graph() {
   // 관계도 화면
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
+
       {/* 상단 컨트롤 */}
       {!controlsCollapsed && (
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 shrink-0">
           <div className="flex gap-6 h-40">
+
             {/* 챕터 선택 */}
             <div className="w-48 shrink-0 flex flex-col">
               <button
@@ -281,7 +320,7 @@ function Graph() {
               <label className="text-xs font-semibold text-gray-500 mb-1">챕터 선택</label>
               <select
                 value={currentChapter}
-                onChange={(e) => setCurrentChapter(Number(e.target.value))}
+                onChange={(e) => handleChapterChange(Number(e.target.value))}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-800 outline-none focus:border-green-800 focus:ring-1 focus:ring-green-800 cursor-pointer"
               >
                 {chapters.map(ch => (
@@ -291,22 +330,20 @@ function Graph() {
                 ))}
               </select>
             </div>
-          
+
             {/* 사건 검색 + 리스트 */}
             <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-gray-50 shadow-inner">
-              {/* 선택된 사건 표시 */}
               {selectedEvent && (
                 <div className="px-3 py-1.5 bg-green-50 border-b border-green-100 flex items-center justify-between">
                   <span className="text-xs text-green-700 font-semibold">선택됨: {selectedEvent.short_title}</span>
                   <button
-                    onClick={() => setSelectedEvent(null)}
+                    onClick={() => handleEventSelect(selectedEvent)}
                     className="text-green-400 hover:text-green-700 text-xs font-bold"
                   >
                     ✕
                   </button>
                 </div>
               )}
-
               <div className="p-2 border-b border-gray-200 bg-white">
                 <input
                   type="text"
@@ -322,7 +359,7 @@ function Graph() {
                     {filteredEvents.map(ev => (
                       <li
                         key={ev.event_id}
-                        onClick={() => setSelectedEvent(selectedEvent?.event_id === ev.event_id ? null : ev)}
+                        onClick={() => handleEventSelect(ev)}
                         className={`px-3 py-2 text-sm rounded-md cursor-pointer transition-colors flex items-center gap-3
                           ${selectedEvent?.event_id === ev.event_id
                             ? 'bg-green-800 text-white font-semibold shadow-sm'
@@ -358,14 +395,14 @@ function Graph() {
                 </>
               ) : (
                 <p className="text-sm text-green-800/60 leading-relaxed">
-                  좌측 목록에서 탐색할<br/>사건을 선택해 주세요.
+                  좌측 목록에서 탐색할<br />사건을 선택해 주세요.
                 </p>
               )}
             </div>
           </div>
         </div>
       )}
-      
+
       {/* 접기/펼치기 버튼 */}
       <div className="flex justify-end px-6 py-1 bg-white border-b border-gray-100">
         <button
@@ -380,20 +417,27 @@ function Graph() {
       <div className="flex flex-1 overflow-hidden relative">
         <div className="flex-1 bg-gray-50" ref={cyRef} />
 
-        {/* 줌 버튼 - cyRef 밖에 */}
+        {/* 줌 / 저장 버튼 */}
         <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
-          <button 
-            title="확대"
-            onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 1.2)}
-            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center font-bold">+</button>
-          <button 
-            title="축소"
-            onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 0.8)}
-            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center font-bold">−</button>
-          <button 
-            title="중심 맞추기"
-            onClick={() => cyInstance.current?.fit()}
-            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center text-xs">⊙</button>
+          <button title="확대" onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 1.2)}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center">
+            <Plus size={14} />
+          </button>
+          <button title="축소" onClick={() => cyInstance.current?.zoom(cyInstance.current.zoom() * 0.8)}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center">
+            <Minus size={14} />
+          </button>
+          <button title="중심 맞추기" onClick={() => cyInstance.current?.fit()}
+            className="w-8 h-8 bg-white border border-gray-200 rounded-lg shadow text-gray-600 hover:bg-gray-50 flex items-center justify-center">
+            <Maximize2 size={14} />
+          </button>
+          {/* 드래그 후 변경사항 있을 때만 저장 버튼 표시 */}
+          {isDirty && (
+            <button title="위치 저장" onClick={handleSavePositions}
+              className="w-8 h-8 bg-green-800 border border-green-700 rounded-lg shadow text-white hover:bg-green-700 flex items-center justify-center">
+              <Save size={14} />
+            </button>
+          )}
         </div>
 
         {/* 인물 정보 패널 */}
@@ -416,11 +460,12 @@ function Graph() {
                 <div className="border-t border-gray-100 pt-4 space-y-4">
                   <div>
                     <p className="text-xs text-gray-400 mb-1">역할</p>
-                    <p className="text-sm text-gray-700">{selectedNode.role_in_event || '정보 없음'}</p>
+                    <p className="text-sm text-gray-700">{selectedNode.role || '정보 없음'}</p>
                   </div>
                 </div>
               </div>
             ) : (
+              /* 전체 인물 목록 그리드 */
               <div className="grid grid-cols-3 gap-3">
                 {graphNodes.length > 0 ? (
                   graphNodes.map(char => (
