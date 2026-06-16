@@ -10,7 +10,7 @@ import Spoiler from './pages/admin/Spoiler'
 import Review from './pages/admin/Review'
 import AdminLayout from './components/AdminLayout'
 import Callback from './pages/auth/Callback'
-import Profile from './pages/profile'
+import Profile from './pages/Profile'
 import Summary from './pages/admin/Summary'
 
 function App() {
