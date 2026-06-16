@@ -68,14 +68,39 @@ function Library() {
       const booksWithProgress = await Promise.all(
         bookList.map(async book => {
           try {
+            // 1. 해당 책의 전체 챕터 리스트를 가져옵니다 (올려주신 JSON 구조)
             const chaptersData = await getBookChapters(book.books_id)
-            const totalChapters = chaptersData.chapters?.length || 1
+            const chapterList = chaptersData.chapters || []
+            const totalChapters = chapterList.length || 1
+            
+            // 2. 진척도 계산
             const progress = book.last_read_chapter_order
               ? Math.round((book.last_read_chapter_order / totalChapters) * 100)
               : 0
-            return { ...book, progress }
-          } catch {
-            return { ...book, progress: 0 }
+
+            // 💡 [핵심 교정] 올려주신 chapters 데이터에서 일치하는 타이틀 찾기
+            // book.last_read_chapter_order가 2라면, chapter_order가 2인 "제1장 두 세계"를 찾습니다.
+            const matchedChapter = chapterList.find(
+              ch => Number(ch.chapter_order) === Number(book.last_read_chapter_order)
+            )
+
+            // 만약 매칭되는 챕터 오브젝트가 있으면 그 title을 쓰고, 없으면 기본 계산식이나 null 처리
+            const lastChapterName = matchedChapter 
+              ? matchedChapter.title 
+              : (book.last_read_chapter_order ? `${book.last_read_chapter_order}화` : '기록 없음')
+
+            return { 
+              ...book, 
+              progress,
+              lastChapter: lastChapterName // 👈 이제 selectedBook.lastChapter에 "제1장 두 세계"가 정상 바인딩됩니다.
+            }
+          } catch (err) {
+            console.error("챕터 매핑 실패:", err)
+            return { 
+              ...book, 
+              progress: 0,
+              lastChapter: '기록 없음'
+            }
           }
         })
       )

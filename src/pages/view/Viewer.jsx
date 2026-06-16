@@ -1,22 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import ePub from 'epubjs'
-import { Users, Network, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react' // Bookmark 아이콘 추가
+import { Users, Network, ChevronLeft } from 'lucide-react'
 import { 
   getBookById, 
   getBookRelations, 
   getBookChapters, 
-  getBookmarkByUserId, // 추가
-  saveBookmarkByUserId // 추가
+  getBookmarkByUserId,
+  saveBookmarkByUserId
 } from '../../api'
 
 function Viewer() {
   const { booksId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const resumeChapterOrder = location.state?.resumeChapterOrder
+
   const viewerRef = useRef(null)
   const renditionRef = useRef(null)
   const bookRef = useRef(null)
+  const chaptersRef = useRef([])
+  const tocRef = useRef([])
+  const initialLocationSetRef = useRef(false)
+  const hrefToChapterRef = useRef({})
+  
+  const booksIdRef = useRef(booksId)
+  const resumeChapterOrderRef = useRef(resumeChapterOrder)
+  const setCurrentPRef = useRef(null)
+  
+  // 💡 [핵심] Strict Mode 등으로 인해 이중 마운트될 때, 
+  // 이미 로딩이 시작된 epub 경로를 기억하여 중복 생성을 원천 차단하는 플래그
+  const isInitializingRef = useRef(null)
+
   const [toc, setToc] = useState([])
   const [currentHref, setCurrentHref] = useState('')
   const [showPersonPanel, setShowPersonPanel] = useState(false)
@@ -25,15 +40,12 @@ function Viewer() {
   const [persons, setPersons] = useState([])
   const [currentP, setCurrentP] = useState(0)
   const [chapters, setChapters] = useState([])
+  const [showFontPanel, setShowFontPanel] = useState(false)
+  const [fontSize, setFontSize] = useState(100)
 
-  const location = useLocation()
-  const resumeChapterOrder = location.state?.resumeChapterOrder
-
-  const chaptersRef = useRef([])
-  const tocRef = useRef([])
-  
-  // 📍 이어서 보기를 위해 최초 1회만 위치 이동 처리를 하기 위한 플래그 ref
-  const initialLocationSetRef = useRef(false)
+  useEffect(() => { booksIdRef.current = booksId }, [booksId])
+  useEffect(() => { resumeChapterOrderRef.current = resumeChapterOrder }, [resumeChapterOrder])
+  useEffect(() => { setCurrentPRef.current = setCurrentP })
 
   const getHrefByTitle = (title) => {
     const found = toc.find(item =>
@@ -41,25 +53,20 @@ function Viewer() {
     )
     return found?.href
   }
-  const [showFontPanel, setShowFontPanel] = useState(false)
-  const [fontSize, setFontSize] = useState(100)
-  // 다른 ref들과 함께 상단에 선언
-const hrefToChapterRef = useRef({})
 
   const changeFontSize = (delta) => {
     const newSize = Math.min(150, Math.max(70, fontSize + delta))
     setFontSize(newSize)
-     renditionRef.current?.themes.fontSize(`${newSize}%`)
+    renditionRef.current?.themes.fontSize(`${newSize}%`)
   }
 
-  // 책 정보 가져오기
+  // 1. 데이터 로드부들
   useEffect(() => {
     getBookById(booksId)
       .then(data => setBookInfo(data.book))
       .catch(err => console.error(err))
   }, [booksId])
 
-  // currentP 바뀔 때 인물 API 호출
   useEffect(() => {
     if (!booksId || currentP === 0) return
     getBookRelations(booksId, currentP)
@@ -68,134 +75,147 @@ const hrefToChapterRef = useRef({})
   }, [booksId, currentP])
 
   useEffect(() => {
-     getBookChapters(booksId)
-       .then(data => {
-         setChapters(data.chapters || [])
-         chaptersRef.current = data.chapters || []
-       })
+    getBookChapters(booksId)
+      .then(data => {
+        setChapters(data.chapters || [])
+        chaptersRef.current = data.chapters || []
+      })
       .catch(err => console.error(err))
   }, [booksId])
 
+  // 2. Epub 렌더링 엔진 초기화
+  const epubUrl = bookInfo?.epub_blob_path;
+  useEffect(() => {
+    if (!viewerRef.current || !epubUrl) return
 
-useEffect(() => {
-  if (!viewerRef.current || !bookInfo?.epub_blob_path) return
+    // 💡 이미 같은 책이 초기화 중이거나 완료되었다면 절대 중복해서 생성하지 않습니다.
+    if (isInitializingRef.current === epubUrl) return
+    isInitializingRef.current = epubUrl
 
-  const book = ePub(bookInfo.epub_blob_path)
-  bookRef.current = book
+    // 만약 이전 인스턴스가 남아있다면 안전하게 비워줍니다.
+    if (viewerRef.current) {
+      viewerRef.current.innerHTML = '';
+    }
 
-  const rendition = book.renderTo(viewerRef.current, {
-    width: '100%',
-    height: '100%',
-    flow: 'scrolled',
-    manager: 'continuous',
-    allowScriptedContent: true
-  })
+    let destroyed = false
+    const book = ePub(epubUrl)
+    bookRef.current = book
 
-  renditionRef.current = rendition
+    const rendition = book.renderTo(viewerRef.current, {
+      width: '100%',
+      height: '100%',
+      flow: 'scrolled',
+      manager: 'continuous',
+      allowScriptedContent: true
+    })
+    renditionRef.current = rendition
 
-  // 📍 1. spine + DB chapters 매핑 완료 후 북마크 이동
-  book.loaded.navigation.then(async nav => {
-    setToc(nav.toc)
-    tocRef.current = nav.toc
+    // 모든 리소스가 비동기적으로 로드 및 준비가 끝난 후 UI 조작 시작
+    book.ready.then(async () => {
+      if (destroyed) return
 
-    const spineItems = []
-    book.spine.each(item => spineItems.push(item.href))
+      const nav = book.navigation
+      setToc(nav.toc || [])
+      tocRef.current = nav.toc || []
 
-    const flatToc = nav.toc.flatMap(item =>
-      item.subitems?.length ? item.subitems : [item]
-    )
+      const spineItems = []
+      book.spine.each(item => spineItems.push(item.href))
 
-    const hrefToChapter = {}
-
-    chaptersRef.current.forEach(chapter => {
-      const matched = flatToc.find(tocItem =>
-        tocItem.label?.trim() === chapter.title?.trim()
+      const flatToc = (nav.toc || []).flatMap(item =>
+        item.subitems?.length ? item.subitems : [item]
       )
-      if (matched) {
-        const hrefKey = matched.href?.split('#')[0]
-        hrefToChapter[hrefKey] = chapter
-      }
-    })
 
-    const mappedHrefs = new Set(Object.keys(hrefToChapter))
-    const unmappedChapters = [...chaptersRef.current]
-      .sort((a, b) => a.chapter_order - b.chapter_order)
-      .filter(ch => !Object.values(hrefToChapter).includes(ch))
+      const hrefToChapter = {}
+      chaptersRef.current.forEach(chapter => {
+        const matched = flatToc.find(tocItem =>
+          tocItem.label?.trim() === chapter.title?.trim()
+        )
+        if (matched) {
+          const hrefKey = matched.href?.split('#')[0]
+          hrefToChapter[hrefKey] = chapter
+        }
+      })
 
-    const unmappedSpines = spineItems.filter(href => !mappedHrefs.has(href))
-    unmappedSpines.forEach((href, i) => {
-      if (unmappedChapters[i]) hrefToChapter[href] = unmappedChapters[i]
-    })
+      const mappedHrefs = new Set(Object.keys(hrefToChapter))
+      const unmappedChapters = [...chaptersRef.current]
+        .sort((a, b) => a.chapter_order - b.chapter_order)
+        .filter(ch => !Object.values(hrefToChapter).includes(ch))
 
-    console.log('✅ href → chapter 매핑 결과:', hrefToChapter)
-    hrefToChapterRef.current = hrefToChapter
+      const unmappedSpines = spineItems.filter(href => !mappedHrefs.has(href))
+      unmappedSpines.forEach((href, i) => {
+        if (unmappedChapters[i]) hrefToChapter[href] = unmappedChapters[i]
+      })
 
-    // 📍 2. 매핑 완료 후 북마크 조회 및 이동
-    try {
-      const res = await getBookmarkByUserId(booksId)
-      const targetOrder = resumeChapterOrder || res?.chapter_order
+      hrefToChapterRef.current = hrefToChapter
 
-      console.log('📍 targetOrder:', targetOrder)
+      // 기존 북마크 정보 동기화
+      const bookmarkRes = await getBookmarkByUserId(booksIdRef.current).catch(() => null)
+      if (destroyed) return
+
+      const targetOrder = resumeChapterOrderRef.current || bookmarkRes?.chapter_order
 
       if (targetOrder && !initialLocationSetRef.current) {
         const entry = Object.entries(hrefToChapterRef.current)
           .find(([, ch]) => Number(ch.chapter_order) === Number(targetOrder))
 
         const href = entry?.[0]
-        console.log('📍 찾은 href:', href)
-
         if (href) {
           initialLocationSetRef.current = true
-          rendition.display(href)
+          await rendition.display(href).catch(() => rendition.display())
           return
         }
       }
-      rendition.display()
-    } catch (err) {
-      console.error('북마크 조회 실패:', err)
-      rendition.display()
-    }
-  })
 
-  // 📍 3. 위치 변경 감지 + 북마크 자동 저장
-  let debounceTimer
-  rendition.on('locationChanged', (location) => {
-    const cfiString = location.start
-    const currentHref = location.href?.split('#')[0]
-
-    setCurrentHref(location.href)
-
-    const paragraphMatch = cfiString.match(/!\/4\/(\d+)/)
-    const paragraph = paragraphMatch ? parseInt(paragraphMatch[1]) / 2 : 0
-
-    const chapter = hrefToChapterRef.current?.[currentHref]
-
-    console.log('📍 현재 위치:', {
-      href: currentHref,
-      chapter_order: chapter?.chapter_order,
-      chapter_title: chapter?.title,
-      paragraph,
+      await rendition.display()
+    }).catch(err => {
+      console.error("Epub 파싱 도중 에러 무시됨:", err)
     })
 
-    clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      const p = location.start.displayed?.page || 0
-      setCurrentP(p)
+    rendition.on('locationChanged', (location) => {
+      if (!location || !location.start) return
+      
+      setCurrentHref(location.start.href)
 
-      if (chapter && booksId) {
-        saveBookmarkByUserId(booksId, chapter.chapter_order, paragraph)
-          .then(() => console.log('북마크 자동 저장 완료'))
-          .catch(err => console.error('북마크 저장 실패:', err))
+      const cfiString = location.start.cfi
+      const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
+      const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
+      
+      if (setCurrentPRef.current) {
+        setCurrentPRef.current(paragraph)
       }
-    }, 5000)
-  })
+    })
 
-  return () => {
-    clearTimeout(debounceTimer)
-    renditionRef.current = null
-    book.destroy()
-  }
-}, [bookInfo, booksId])
+    // Clean-up
+    return () => {
+      destroyed = true
+      
+      // 언마운트될 때 마지막 위치 저장
+      if (renditionRef.current?.location?.start) {
+        const currentHref = renditionRef.current.location.start.href?.split('#')[0]
+        const chapter = hrefToChapterRef.current?.[currentHref]
+        const cfiString = renditionRef.current.location.start.cfi
+        const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
+        const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
+
+        if (chapter && booksIdRef.current) {
+          saveBookmarkByUserId(booksIdRef.current, chapter.chapter_order, paragraph)
+            .catch(err => console.error("자동 저장 실패:", err))
+        }
+      }
+
+      // 페이지 전환 등으로 유저가 아예 나갈 때만 리셋되도록, 
+      // Strict Mode 일시 해제 시점에는 레퍼런스를 살려둡니다.
+      setTimeout(() => {
+        if (destroyed) {
+          try { renditionRef.current?.destroy() } catch (e) {}
+          renditionRef.current = null
+          try { book?.destroy() } catch (e) {}
+          isInitializingRef.current = null
+        }
+      }, 1000)
+    }
+  }, [epubUrl])
+
   const goToChapter = (href) => renditionRef.current?.display(href)
 
   return (
@@ -216,33 +236,31 @@ useEffect(() => {
                 }}
                 className="w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 text-gray-600"
               >
-              {chapter.title}
-            </button>
-          ))
-        ) : (
-        toc.map((item, i) => (
-          <button
-            key={i}
-            onClick={() => goToChapter(item.href)}
-            className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
-              currentHref === item.href
-                ? 'bg-green-100 text-green-900 font-semibold'
-                : 'text-gray-600'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))
-      )}
-    </div>
-  </div>
-      
+                {chapter.title}
+              </button>
+            ))
+          ) : (
+            toc.map((item, i) => (
+              <button
+                key={i}
+                onClick={() => goToChapter(item.href)}
+                className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
+                  currentHref === item.href
+                    ? 'bg-green-100 text-green-900 font-semibold'
+                    : 'text-gray-600'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* 본문 */}
       <div className="flex-1 flex flex-col">
         {/* 상단 바 */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
-          {/* 왼쪽 */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/library')}
@@ -253,12 +271,9 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* 가운데 */}
           <p className="text-sm text-gray-500 font-medium">{bookInfo?.title || '로딩 중...'}</p>
 
-          {/* 오른쪽 */}
           <div className="flex items-center gap-4">
-            {/* Aa 버튼 */}
             <div className="relative">
               <button
                 onClick={() => setShowFontPanel(!showFontPanel)}
@@ -302,19 +317,20 @@ useEffect(() => {
             <button
               onClick={() => navigate(`/graph?bookId=${booksId}`)}
               className="text-sm text-gray-500 font-semibold flex items-center gap-1 hover:text-green-900 transition-colors"
-              >
+            >
               <Network size={16} />
               관계도
             </button>
           </div>
         </div>
+
         {/* epub 렌더링 영역 */}
-        <div className="flex flex-1 overflow-hidden">
-          <div ref={viewerRef} className="flex-1 overflow-y-auto h-full" />
+        <div className="flex flex-1 overflow-hidden relative">
+          <div ref={viewerRef} className="absolute inset-0 w-full h-full overflow-hidden" />
 
           {/* 인물 패널 */}
           {showPersonPanel && (
-            <div className="w-80 border-l border-gray-200 bg-white flex flex-col overflow-hidden">
+            <div className="w-80 border-l border-gray-200 bg-white flex flex-col overflow-hidden z-10">
               <div className="p-4 border-b border-gray-200">
                 <p className="text-xs text-gray-400 font-semibold">등장 인물</p>
               </div>
