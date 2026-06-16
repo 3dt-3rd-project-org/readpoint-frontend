@@ -90,7 +90,13 @@ export const approveAnalysisForReview = (bookId, data) => authFetch(`/adm/books/
 })
 
 // 책 검수 - 줄거리 요약 리스트 가져오기
-export const getBookSummaryForReview = (bookId) => authFetch(`/adm/books/${bookId}/summary`)
+export const getBookSummaryForReview = (bookId) => authFetch(`/adm/books/${bookId}/summaries`)
+
+// 책 검수 - 줄거리 요약 수정
+export const updateBookSummaryForReview = (bookId, data) => authFetch(`/adm/books/${bookId}/approve-summary`, {
+  method: 'POST',
+  body: JSON.stringify(data)
+})
 
 // ── Reader Books ─────────────────────────────────────
 // 사용자 책 목록
