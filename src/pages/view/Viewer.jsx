@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import ePub from 'epubjs'
-import { Users, Network, ChevronLeft } from 'lucide-react'
+import { Network, ChevronLeft, MessageCircle, X } from 'lucide-react'
 import { 
   getBookById, 
-  getBookRelations, 
   getBookChapters, 
   getBookmarkByUserId,
-  saveBookmarkByUserId
+  saveBookmarkByUserId,
+  chatWithBook
 } from '../../api'
+
+// 채팅 패널 추천 질문 - 대화 시작 전에만 표시
+const SUGGESTED_QUESTIONS = [
+  '이 인물은 왜 이런 행동을 했을까?',
+  '이 장면에서 핵심 갈등이 뭐야?',
+  '이 장면의 분위기를 설명해줘',
+  '작가가 전달하려는 메시지가 뭘까?',
+]
 
 function Viewer() {
   const { booksId } = useParams()
@@ -16,6 +24,7 @@ function Viewer() {
   const location = useLocation()
   const resumeChapterOrder = location.state?.resumeChapterOrder
 
+  // epub 렌더링 관련 ref
   const viewerRef = useRef(null)
   const renditionRef = useRef(null)
   const bookRef = useRef(null)
@@ -23,29 +32,43 @@ function Viewer() {
   const tocRef = useRef([])
   const initialLocationSetRef = useRef(false)
   const hrefToChapterRef = useRef({})
-  
+
+  // 현재 읽은 위치 추적 (채팅 API에 넘길 값)
+  const currentChapterRef = useRef(null)
+  const currentParagraphRef = useRef(0)
+
+  // useEffect 내부에서 최신 값 참조하기 위한 ref
   const booksIdRef = useRef(booksId)
   const resumeChapterOrderRef = useRef(resumeChapterOrder)
   const setCurrentPRef = useRef(null)
-  
-  // 💡 [핵심] Strict Mode 등으로 인해 이중 마운트될 때, 
-  // 이미 로딩이 시작된 epub 경로를 기억하여 중복 생성을 원천 차단하는 플래그
+
+  // Strict Mode 이중 마운트 방지 플래그
   const isInitializingRef = useRef(null)
 
   const [toc, setToc] = useState([])
   const [currentHref, setCurrentHref] = useState('')
-  const [showPersonPanel, setShowPersonPanel] = useState(false)
-  const [selectedPerson, setSelectedPerson] = useState(null)
   const [bookInfo, setBookInfo] = useState(null)
-  const [persons, setPersons] = useState([])
   const [currentP, setCurrentP] = useState(0)
   const [chapters, setChapters] = useState([])
-  const [showFontPanel, setShowFontPanel] = useState(false)
   const [fontSize, setFontSize] = useState(100)
+
+  // 채팅 패널 기본 닫힘
+  const [showChat, setShowChat] = useState(false)
+
+  // 채팅 상태
+  const [chatHistory, setChatHistory] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatBottomRef = useRef(null)
 
   useEffect(() => { booksIdRef.current = booksId }, [booksId])
   useEffect(() => { resumeChapterOrderRef.current = resumeChapterOrder }, [resumeChapterOrder])
   useEffect(() => { setCurrentPRef.current = setCurrentP })
+
+  // 새 메시지 올 때마다 채팅창 하단으로 스크롤
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatHistory])
 
   const getHrefByTitle = (title) => {
     const found = toc.find(item =>
@@ -60,20 +83,46 @@ function Viewer() {
     renditionRef.current?.themes.fontSize(`${newSize}%`)
   }
 
-  // 1. 데이터 로드부들
+  // 채팅 전송 - 현재 위치(chapter_order, paragraph)를 API에 넘김
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || chatLoading) return
+
+    const question = chatInput.trim()
+    setChatInput('')
+    setChatLoading(true)
+
+    const newHistory = [...chatHistory, { role: 'user', content: question }]
+    setChatHistory(newHistory)
+
+    try {
+      const res = await chatWithBook(
+        booksId,
+        question,
+        currentChapterRef.current?.chapter_order || 1,
+        currentParagraphRef.current || 0,
+        chatHistory
+      )
+      setChatHistory([...newHistory, { 
+        role: 'assistant', 
+        content: res.answer,
+        context_refs: res.context_refs
+      }])
+    } catch (err) {
+      console.error(err)
+      setChatHistory([...newHistory, { role: 'assistant', content: '오류가 발생했어요. 다시 시도해주세요.' }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // 책 정보 조회
   useEffect(() => {
     getBookById(booksId)
       .then(data => setBookInfo(data.book))
       .catch(err => console.error(err))
   }, [booksId])
 
-  useEffect(() => {
-    if (!booksId || currentP === 0) return
-    getBookRelations(booksId, currentP)
-      .then(data => setPersons(data.nodes || []))
-      .catch(err => console.error(err))
-  }, [booksId, currentP])
-
+  // 챕터 목록 조회
   useEffect(() => {
     getBookChapters(booksId)
       .then(data => {
@@ -83,19 +132,14 @@ function Viewer() {
       .catch(err => console.error(err))
   }, [booksId])
 
-  // 2. Epub 렌더링 엔진 초기화
-  const epubUrl = bookInfo?.epub_blob_path;
+  // epub 렌더링 초기화
+  const epubUrl = bookInfo?.epub_blob_path
   useEffect(() => {
     if (!viewerRef.current || !epubUrl) return
-
-    // 💡 이미 같은 책이 초기화 중이거나 완료되었다면 절대 중복해서 생성하지 않습니다.
     if (isInitializingRef.current === epubUrl) return
     isInitializingRef.current = epubUrl
 
-    // 만약 이전 인스턴스가 남아있다면 안전하게 비워줍니다.
-    if (viewerRef.current) {
-      viewerRef.current.innerHTML = '';
-    }
+    if (viewerRef.current) viewerRef.current.innerHTML = ''
 
     let destroyed = false
     const book = ePub(epubUrl)
@@ -110,7 +154,6 @@ function Viewer() {
     })
     renditionRef.current = rendition
 
-    // 모든 리소스가 비동기적으로 로드 및 준비가 끝난 후 UI 조작 시작
     book.ready.then(async () => {
       if (destroyed) return
 
@@ -125,6 +168,7 @@ function Viewer() {
         item.subitems?.length ? item.subitems : [item]
       )
 
+      // epub href ↔ DB chapter 매핑
       const hrefToChapter = {}
       chaptersRef.current.forEach(chapter => {
         const matched = flatToc.find(tocItem =>
@@ -136,6 +180,7 @@ function Viewer() {
         }
       })
 
+      // 매핑 안 된 챕터는 spine 순서로 fallback 매핑
       const mappedHrefs = new Set(Object.keys(hrefToChapter))
       const unmappedChapters = [...chaptersRef.current]
         .sort((a, b) => a.chapter_order - b.chapter_order)
@@ -148,7 +193,7 @@ function Viewer() {
 
       hrefToChapterRef.current = hrefToChapter
 
-      // 기존 북마크 정보 동기화
+      // 북마크 조회 후 이어읽기 위치로 이동
       const bookmarkRes = await getBookmarkByUserId(booksIdRef.current).catch(() => null)
       if (destroyed) return
 
@@ -157,7 +202,6 @@ function Viewer() {
       if (targetOrder && !initialLocationSetRef.current) {
         const entry = Object.entries(hrefToChapterRef.current)
           .find(([, ch]) => Number(ch.chapter_order) === Number(targetOrder))
-
         const href = entry?.[0]
         if (href) {
           initialLocationSetRef.current = true
@@ -167,29 +211,30 @@ function Viewer() {
       }
 
       await rendition.display()
-    }).catch(err => {
-      console.error("Epub 파싱 도중 에러 무시됨:", err)
-    })
+    }).catch(err => console.error('Epub 파싱 도중 에러 무시됨:', err))
 
-    rendition.on('locationChanged', (location) => {
-      if (!location || !location.start) return
-      
-      setCurrentHref(location.start.href)
+  rendition.on('locationChanged', (location) => {
+    if (!location) return
 
-      const cfiString = location.start.cfi
-      const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
-      const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
-      
-      if (setCurrentPRef.current) {
-        setCurrentPRef.current(paragraph)
-      }
-    })
+    const href = location.href?.split('#')[0]
+    setCurrentHref(href)
 
-    // Clean-up
+    const chapter = hrefToChapterRef.current?.[href]
+    if (chapter) currentChapterRef.current = chapter
+
+    // CFI 타입 체크 후 문단 번호 추출
+    const cfiString = typeof location.start === 'string' ? location.start : location.start?.cfi
+    const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
+    const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
+    currentParagraphRef.current = paragraph
+
+    if (setCurrentPRef.current) setCurrentPRef.current(paragraph)
+  })
+
+    // cleanup - 언마운트 시 마지막 위치 저장
     return () => {
       destroyed = true
-      
-      // 언마운트될 때 마지막 위치 저장
+
       if (renditionRef.current?.location?.start) {
         const currentHref = renditionRef.current.location.start.href?.split('#')[0]
         const chapter = hrefToChapterRef.current?.[currentHref]
@@ -199,12 +244,10 @@ function Viewer() {
 
         if (chapter && booksIdRef.current) {
           saveBookmarkByUserId(booksIdRef.current, chapter.chapter_order, paragraph)
-            .catch(err => console.error("자동 저장 실패:", err))
+            .catch(err => console.error('자동 저장 실패:', err))
         }
       }
 
-      // 페이지 전환 등으로 유저가 아예 나갈 때만 리셋되도록, 
-      // Strict Mode 일시 해제 시점에는 레퍼런스를 살려둡니다.
       setTimeout(() => {
         if (destroyed) {
           try { renditionRef.current?.destroy() } catch (e) {}
@@ -216,12 +259,15 @@ function Viewer() {
     }
   }, [epubUrl])
 
-  const goToChapter = (href) => renditionRef.current?.display(href)
+  const goToChapter = (href) => {
+    renditionRef.current?.display(href)
+  }
 
   return (
     <div className="flex h-[calc(100vh-80px)]">
-      {/* 목차 */}
-      <div className="w-52 border-r border-gray-200 bg-gray-50 flex flex-col overflow-hidden">
+
+      {/* 목차 - 고정 */}
+      <div className="w-52 border-r border-gray-200 bg-gray-50 flex flex-col overflow-hidden shrink-0">
         <div className="p-4 border-b border-gray-200">
           <p className="text-xs text-gray-400 font-semibold">목차</p>
         </div>
@@ -245,9 +291,7 @@ function Viewer() {
                 key={i}
                 onClick={() => goToChapter(item.href)}
                 className={`w-full text-left text-xs py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors mb-1 ${
-                  currentHref === item.href
-                    ? 'bg-green-100 text-green-900 font-semibold'
-                    : 'text-gray-600'
+                  currentHref === item.href ? 'bg-green-100 text-green-900 font-semibold' : 'text-gray-600'
                 }`}
               >
                 {item.label}
@@ -257,10 +301,11 @@ function Viewer() {
         </div>
       </div>
 
-      {/* 본문 */}
-      <div className="flex-1 flex flex-col">
+      {/* 본문 + 채팅 패널 */}
+      <div className="flex-1 flex flex-col min-w-0">
+
         {/* 상단 바 */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/library')}
@@ -274,46 +319,6 @@ function Viewer() {
           <p className="text-sm text-gray-500 font-medium">{bookInfo?.title || '로딩 중...'}</p>
 
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <button
-                onClick={() => setShowFontPanel(!showFontPanel)}
-                className={`text-sm font-bold transition-colors ${
-                  showFontPanel ? 'text-green-900' : 'text-gray-400 hover:text-green-900'
-                }`}
-              >
-                Aa
-              </button>
-              {showFontPanel && (
-                <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-44 z-50">
-                  <p className="text-xs text-gray-400 mb-3">글씨 크기</p>
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => changeFontSize(-10)}
-                      className="w-8 h-8 rounded-full border border-gray-200 text-gray-400 hover:bg-gray-50 font-bold text-xs"
-                    >
-                      가
-                    </button>
-                    <span className="text-xs text-gray-500">{fontSize}%</span>
-                    <button
-                      onClick={() => changeFontSize(10)}
-                      className="w-8 h-8 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold text-sm"
-                    >
-                      가
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setShowPersonPanel(!showPersonPanel)}
-              className={`text-sm font-semibold flex items-center gap-1 transition-colors ${
-                showPersonPanel ? 'text-green-900' : 'text-gray-500 hover:text-green-900'
-              }`}
-            >
-              <Users size={16} />
-              인물
-            </button>
             <button
               onClick={() => navigate(`/graph?bookId=${booksId}`)}
               className="text-sm text-gray-500 font-semibold flex items-center gap-1 hover:text-green-900 transition-colors"
@@ -321,45 +326,120 @@ function Viewer() {
               <Network size={16} />
               관계도
             </button>
+            {/* 채팅 토글 버튼 */}
+            <button
+              onClick={() => setShowChat(!showChat)}
+              className={`text-sm font-semibold flex items-center gap-1 transition-colors ${
+                showChat ? 'text-green-900' : 'text-gray-500 hover:text-green-900'
+              }`}
+            >
+              <MessageCircle size={16} />
+              AI 독서 메이트
+            </button>
           </div>
         </div>
 
-        {/* epub 렌더링 영역 */}
-        <div className="flex flex-1 overflow-hidden relative">
-          <div ref={viewerRef} className="absolute inset-0 w-full h-full overflow-hidden" />
+        {/* epub + 채팅 패널 */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* epub 렌더링 영역 */}
+          <div className="flex-1 relative overflow-hidden">
+            <div ref={viewerRef} className="absolute inset-0 w-full h-full overflow-hidden" />
 
-          {/* 인물 패널 */}
-          {showPersonPanel && (
-            <div className="w-80 border-l border-gray-200 bg-white flex flex-col overflow-hidden z-10">
-              <div className="p-4 border-b border-gray-200">
-                <p className="text-xs text-gray-400 font-semibold">등장 인물</p>
+            {/* 폰트 크기 조절 툴바 - 우측 하단 플로팅 */}
+            <div className="absolute bottom-4 right-4 z-20 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full px-3 py-1.5 flex items-center gap-3 shadow-lg opacity-40 hover:opacity-100 transition-opacity duration-200">
+              <button onClick={() => changeFontSize(-10)} className="text-xs text-gray-600 hover:text-green-900 font-bold">가</button>
+              <span className="text-xs text-gray-400">{fontSize}%</span>
+              <button onClick={() => changeFontSize(10)} className="text-sm text-gray-700 hover:text-green-900 font-bold">가</button>
+            </div>
+          </div>
+
+          {/* 채팅 패널 - 인물 패널 자리 */}
+          {showChat && (
+            <div className="w-80 border-l border-gray-200 bg-white flex flex-col shrink-0">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">AI 독서 메이트</p>
+                  {/* 현재 읽은 위치 표시 */}
+                  {currentChapterRef.current && (
+                    <p className="text-xs text-gray-400">
+                      {currentChapterRef.current.title} · {currentParagraphRef.current}번째 문단
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => setShowChat(false)} className="text-gray-400 hover:text-gray-600">
+                  <X size={14} />
+                </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-3">
-                {persons.length === 0 ? (
-                  <p className="text-xs text-gray-400 p-3">인물 데이터 준비 중...</p>
-                ) : (
-                  persons.map(person => (
-                    <button
-                      key={person.id}
-                      onClick={() => setSelectedPerson(selectedPerson?.id === person.id ? null : person)}
-                      className={`w-full text-left p-3 rounded-xl mb-2 transition-colors ${
-                        selectedPerson?.id === person.id
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-green-900 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
-                          {person.name?.[0]}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{person.name}</p>
-                          <p className="text-xs text-gray-400">{person.role}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))
+
+              {/* 대화 메시지 목록 */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {chatHistory.length === 0 && (
+                  <div className="mt-4">
+                    <p className="text-center text-xs text-gray-400 mb-4 leading-relaxed">
+                      지금 읽은 내용에 대해<br />자유롭게 질문해보세요!<br />
+                      <span className="text-gray-300">스포일러 없이 답변해드려요 🙂</span>
+                    </p>
+                    {/* 추천 질문 - 대화 없을 때만 표시 */}
+                    <div className="flex flex-col gap-2">
+                      {SUGGESTED_QUESTIONS.map((q, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setChatInput(q)}
+                          className="text-left text-xs px-3 py-2 rounded-xl border border-gray-200 text-gray-600 hover:border-green-700 hover:text-green-800 hover:bg-green-50 transition-colors"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
+                {chatHistory.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-green-900 text-white rounded-br-sm'
+                        : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                    }`}>
+                      {msg.content}
+                      {/* RAG 참고 문단 출처 표시 */}
+                      {msg.context_refs?.length > 0 && (
+                        <p className="text-gray-400 text-[10px] mt-1">
+                          📖 {msg.context_refs.map(r => `${r.chapter_order}번째 목차 ${r.paragraph_order}번째 문단`).join(', ')} 참고
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-3 py-2 text-xs text-gray-400">
+                      생각 중...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* 채팅 입력창 */}
+              <div className="border-t border-gray-200 shrink-0">
+                <div className="flex gap-2 p-3">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
+                    placeholder="질문을 입력하세요..."
+                    className="flex-1 text-xs border border-gray-200 rounded-full px-3 py-2 outline-none focus:border-green-700"
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={handleSendChat}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="w-8 h-8 bg-green-900 text-white rounded-full flex items-center justify-center hover:bg-green-800 disabled:opacity-40 transition-colors shrink-0"
+                  >
+                    ↑
+                  </button>
+                </div>
               </div>
             </div>
           )}

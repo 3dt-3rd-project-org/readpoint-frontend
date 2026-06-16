@@ -45,7 +45,7 @@ function Auth() {
 
   const startGoogleAuth = (loginType) => {
     const GOOGLE_CLIENT_ID = '898813475333-g6vpbm9jgrvm4v8ec6525c73rcd52toq.apps.googleusercontent.com'
-    const REDIRECT_URI = 'http://localhost:5173/auth/callback'
+    const REDIRECT_URI = window.location.origin + '/auth/callback'
     const googleAuthUrl =
       `https://accounts.google.com/o/oauth2/v2/auth?` +
       `response_type=code` +

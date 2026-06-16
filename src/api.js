@@ -140,3 +140,15 @@ export const getWebPubSubToken = () => authFetch('/adm/analyze/token')
 // ── Application Insights ─────────────────────────────────
 // 인사이트 조회
 export const getInsights = (timespan = 'PT1H') => authFetch(`/insights/insights?timespan=${timespan}`)
+
+// ── AI 챗봇 ─────────────────────────────────
+export const chatWithBook = (bookId, question, chapterOrder, paragraphOrder, history) =>
+  authFetch(`/embedding/books/${bookId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({
+      question,
+      chapter_order: chapterOrder,
+      paragraph_order: paragraphOrder,
+      history
+    })
+  })
