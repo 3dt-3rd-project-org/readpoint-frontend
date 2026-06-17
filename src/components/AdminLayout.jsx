@@ -1,14 +1,15 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Search, ShieldAlert, Settings } from 'lucide-react'
+import { LayoutDashboard, BookText, Database, FileSearch, Settings } from 'lucide-react'
 
 function AdminLayout({ children }) {
   const location = useLocation()
 
-  const menus = [
-    { path: '/admin', label: '대시보드', icon: <LayoutDashboard size={18} /> },
-    { path: '/admin/review', label: '검수', icon: <Search size={18} /> },
-    { path: '/admin/summary', label: '요약검수', icon: <Search size={18} /> },
-  ]
+const menus = [
+  { path: '/admin',          label: '대시보드',      icon: <LayoutDashboard size={18} /> },
+  { path: '/admin/booksinfo', label: '도서 정보 검수', icon: <BookText size={18} /> },
+  { path: '/admin/review',   label: '데이터 검수',   icon: <Database size={18} /> },
+  { path: '/admin/summary',  label: '요약 검수',     icon: <FileSearch size={18} /> },
+]
 
   return (
     <div className="flex h-[calc(100vh-80px)]">

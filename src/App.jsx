@@ -12,6 +12,7 @@ import AdminLayout from './components/AdminLayout'
 import Callback from './pages/auth/Callback'
 import Profile from './pages/Profile'
 import Summary from './pages/admin/Summary'
+import BooksInfo from './pages/admin/BooksInfo'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/auth/callback" element={<Callback />} />
         <Route path="/admin" element={<AdminLayout><Dashboard /></AdminLayout>} />
+        <Route path="/admin/booksinfo" element={<AdminLayout><BooksInfo /></AdminLayout>} />
         <Route path="/admin/review" element={<AdminLayout><Review /></AdminLayout>} />
         <Route path="/admin/spoiler" element={<AdminLayout><Spoiler /></AdminLayout>} />
         <Route path="/admin/summary" element={<AdminLayout><Summary /></AdminLayout>} />
