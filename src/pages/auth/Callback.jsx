@@ -45,7 +45,16 @@ function Callback() {
           // 관리자 승인 대기 중
           navigate('/auth?pending=true', { replace: true })
         } else {
-          navigate('/auth')
+          // 백엔드가 보낸 에러 객체(data.message)가 존재한다면 alert를 띄웁니다.
+          if (data && data.message) {
+            alert(data.message)
+          } else if (data && data.error === 'Forbidden') {
+            alert('관리자 계정은 일반 사용자 로그인을 이용할 수 없습니다. 관리자 콘솔을 이용해 주세요.')
+          } else {
+            alert('로그인 처리 중 알 수 없는 오류가 발생했습니다.')
+          }
+        
+          navigate('/auth', { replace: true })
         }
         })
         .catch(err => {
