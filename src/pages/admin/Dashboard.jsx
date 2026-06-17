@@ -34,7 +34,13 @@ function formatMs(ms) {
 function Dashboard() {
   const navigate = useNavigate()
   const [books, setBooks] = useState([])
-  const [logs, setLogs] = useState([])
+  const [logs, setLogs] = useState(() => {
+    const saved = localStorage.getItem('pipeline_logs')
+    return saved ? JSON.parse(saved) : []
+  })
+  useEffect(() => {
+    localStorage.setItem('pipeline_logs', JSON.stringify(logs))
+  }, [logs])
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState(null)
   const [insights, setInsights] = useState({
@@ -45,7 +51,7 @@ function Dashboard() {
     requestsByOperation: []
   })
   const fileInputRef = useRef(null)
-
+  const logsEndRef = useRef(null);
   const [timespan, setTimespan] = useState('PT1H')
 
   const TIMESPAN_OPTIONS = [
@@ -72,6 +78,10 @@ function Dashboard() {
       setInsights(data)
     })
   }, [timespan])
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   const handleFile = (selectedFile) => {
     if (!selectedFile) return
@@ -177,19 +187,32 @@ function Dashboard() {
   }
 
   const handleApproveSummary = async (bookId) => {
-    setLogs(prev => [{
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      type: 'success',
-      text: `${bookId}번 도서 서비스가 성공적으로 배포되었습니다.`
-    }, ...prev])
+    setLogs(prev => {
+        const newLogs = [{
+          time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+          type: 'success',
+          text: `${bookId}번 도서 서비스가 성공적으로 배포되었습니다.`
+        }, ...prev];
+        return newLogs.slice(0, 50); // 최근 50개만 유지
+      });
     try {
       await approveSummary(bookId)
       fetchBooks()
     } catch (error) {
-      console.error('최종 승인 실패:', error)
-      fetchBooks()
-    }
+      console.error('최종 승인 실패:', error);
+
+      setLogs(prev => {
+        const newLogs = [{
+            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+            type: 'error',
+            text: `${bookId}번 도서 배포 승인 중 오류가 발생했습니다.`
+        }, ...prev];
+        return newLogs.slice(0, 50);
+    });
+    
+    fetchBooks();
   }
+}
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
@@ -372,7 +395,16 @@ function Dashboard() {
                   {STATUS_MAP[book.status]?.label || book.status}
                 </span>
                 <span className="flex gap-2">
-                  {book.status === 'READY' && <button onClick={() => handleAnalyze(currentId)} className="px-4 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-lg hover:bg-green-800 transition-colors shadow-sm">1차 분석 시작</button>}
+                  {book.status === 'READY' && (
+                    <>
+                      <button
+                        onClick={() => navigate(`/admin/booksinfo?bookId=${currentId}`)}
+                        className="px-4 py-1.5 bg-blue-50 text-blue-900 border border-blue-300 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        메타 검수
+                      </button>
+                      </>
+                    )}
                   {book.status === 'ANALYZING_FINISHED' && (
                     <button
                       onClick={() => navigate(`/admin/review?bookId=${currentId}`)}
@@ -399,29 +431,35 @@ function Dashboard() {
       </div>
 
       {/* 실시간 알림 */}
-      <div>
-        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <Bell size={14} /> 실시간 알림</p>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-          {logs.length === 0 ? (
-            <div className="px-5 py-4 text-sm text-gray-400">아직 알림이 없습니다.</div>
-          ) : (
-            logs.map((log, i) => (
-              <div key={i} className="flex items-start gap-4 px-5 py-3.5 text-sm">
-                <span className="text-gray-400 shrink-0 w-10">{log.time}</span>
-                <span className="shrink-0">{LOG_ICON[log.type]}</span>
-                <span className={
-            log.type === 'error' ? 'text-red-500' 
-            : log.type === 'success' ? 'text-green-600'
-            : 'text-gray-700'
-          }>{log.text}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </>
-  )
-}
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Bell size={14} /> 실시간 알림
+            </p>
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 max-h-60 overflow-y-auto">
+              {logs.length === 0 ? (
+                <div className="px-5 py-4 text-sm text-gray-400">아직 알림이 없습니다.</div>
+              ) : (
+                <>
+                  {logs.map((log, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-xs">
+                      <span className="text-gray-400 shrink-0 w-16">{log.time}</span>
+                      <span className="shrink-0">{LOG_ICON[log.type]}</span>
+                      <span className={`truncate ${
+                        log.type === 'error' ? 'text-red-500' 
+                        : log.type === 'success' ? 'text-green-600'
+                        : 'text-gray-700'
+                      }`}>
+                        {log.text}
+                      </span>
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )
+    }
 
 export default Dashboard
