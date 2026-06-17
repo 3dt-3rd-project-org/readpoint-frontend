@@ -165,7 +165,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
-      text: `관리자가 2차 요약 파이프라인을 시작했습니다.`
+      text: `관리자가 2차 요약 파이프라인을 시작했습니다. 약 30분 소요예정`
     }, ...prev])
     try {
       await summarizeBook(bookId)
@@ -180,7 +180,7 @@ function Dashboard() {
     setLogs(prev => [{
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'success',
-      text: `관리자가 최종 분석 결과를 승인하여 서비스를 배포했습니다!`
+      text: `${bookId}번 도서 서비스가 성공적으로 배포되었습니다.`
     }, ...prev])
     try {
       await approveSummary(bookId)
