@@ -45,6 +45,9 @@ function Viewer() {
   // Strict Mode 이중 마운트 방지 플래그
   const isInitializingRef = useRef(null)
 
+  // ref 선언부에 추가
+  const destroyTimeoutRef = useRef(null)
+
   const [toc, setToc] = useState([])
   const [currentHref, setCurrentHref] = useState('')
   const [bookInfo, setBookInfo] = useState(null)
@@ -136,10 +139,20 @@ function Viewer() {
   const epubUrl = bookInfo?.epub_blob_path
   useEffect(() => {
     if (!viewerRef.current || !epubUrl) return
-    if (isInitializingRef.current === epubUrl) return
+
+    // StrictMode 이중 마운트 취소 처리
+    if (isInitializingRef.current === epubUrl) {
+      if (destroyTimeoutRef.current) {
+        clearTimeout(destroyTimeoutRef.current)
+        destroyTimeoutRef.current = null
+      }
+      return
+    }
     isInitializingRef.current = epubUrl
 
-    if (viewerRef.current) viewerRef.current.innerHTML = ''
+    if (viewerRef.current) {
+      viewerRef.current.innerHTML = ''
+    }
 
     let destroyed = false
     const book = ePub(epubUrl)
@@ -149,10 +162,27 @@ function Viewer() {
       width: '100%',
       height: '100%',
       flow: 'scrolled',
-      manager: 'continuous',
+      manager: 'continuous', 
       allowScriptedContent: true
     })
     renditionRef.current = rendition
+
+    rendition.on('relocated', (location) => {
+      if (!location || destroyed) return
+
+      const href = location.start?.href?.split('#')[0]
+      setCurrentHref(href)
+
+      const chapter = hrefToChapterRef.current?.[href]
+      if (chapter) currentChapterRef.current = chapter
+
+      const cfiString = typeof location.start === 'string' ? location.start : location.start?.cfi
+      const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
+      const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
+      currentParagraphRef.current = paragraph
+
+      if (setCurrentPRef.current) setCurrentPRef.current(paragraph)
+    })
 
     book.ready.then(async () => {
       if (destroyed) return
@@ -168,70 +198,63 @@ function Viewer() {
         item.subitems?.length ? item.subitems : [item]
       )
 
-      // epub href ↔ DB chapter 매핑
-      const hrefToChapter = {}
-      chaptersRef.current.forEach(chapter => {
-        const matched = flatToc.find(tocItem =>
-          tocItem.label?.trim() === chapter.title?.trim()
-        )
-        if (matched) {
-          const hrefKey = matched.href?.split('#')[0]
-          hrefToChapter[hrefKey] = chapter
-        }
-      })
+      const doMapping = () => {
+        const hrefToChapter = {}
+        const currentChapters = chaptersRef.current || []
 
-      // 매핑 안 된 챕터는 spine 순서로 fallback 매핑
-      const mappedHrefs = new Set(Object.keys(hrefToChapter))
-      const unmappedChapters = [...chaptersRef.current]
-        .sort((a, b) => a.chapter_order - b.chapter_order)
-        .filter(ch => !Object.values(hrefToChapter).includes(ch))
+        currentChapters.forEach(chapter => {
+          const matched = flatToc.find(tocItem =>
+            tocItem.label?.trim() === chapter.title?.trim()
+          )
+          if (matched) {
+            const hrefKey = matched.href?.split('#')[0]
+            hrefToChapter[hrefKey] = chapter
+          }
+        })
 
-      const unmappedSpines = spineItems.filter(href => !mappedHrefs.has(href))
-      unmappedSpines.forEach((href, i) => {
-        if (unmappedChapters[i]) hrefToChapter[href] = unmappedChapters[i]
-      })
+        const mappedHrefs = new Set(Object.keys(hrefToChapter))
+        const unmappedChapters = [...currentChapters]
+          .sort((a, b) => a.chapter_order - b.chapter_order)
+          .filter(ch => !Object.values(hrefToChapter).includes(ch))
 
-      hrefToChapterRef.current = hrefToChapter
+        const unmappedSpines = spineItems.filter(href => !mappedHrefs.has(href))
+        unmappedSpines.forEach((href, i) => {
+          if (unmappedChapters[i]) hrefToChapter[href] = unmappedChapters[i]
+        })
 
-      // 북마크 조회 후 이어읽기 위치로 이동
+        hrefToChapterRef.current = hrefToChapter
+      }
+
+      doMapping()
+
       const bookmarkRes = await getBookmarkByUserId(booksIdRef.current).catch(() => null)
       if (destroyed) return
 
+      doMapping()
+
       const targetOrder = resumeChapterOrderRef.current || bookmarkRes?.chapter_order
 
+      // [중요 수정 3]: 타겟 챕터로 이동 시 렌더링 병목이나 에러로 멈추지 않도록 
+      // 타임아웃/폴백을 걸어 무조건 최초 렌더링 화면을 통과시킵니다.
       if (targetOrder && !initialLocationSetRef.current) {
         const entry = Object.entries(hrefToChapterRef.current)
           .find(([, ch]) => Number(ch.chapter_order) === Number(targetOrder))
         const href = entry?.[0]
         if (href) {
           initialLocationSetRef.current = true
-          await rendition.display(href).catch(() => rendition.display())
-          return
+          try {
+            await rendition.display(href)
+            return
+          } catch (e) {
+            console.warn('지정 위치 이동 실패, 기본 위치로 복구:', e)
+          }
         }
       }
 
-      await rendition.display()
+      // 기본 디스플레이 호출
+      await rendition.display().catch(err => console.error('렌더링 최종 에러:', err))
     }).catch(err => console.error('Epub 파싱 도중 에러 무시됨:', err))
 
-  rendition.on('locationChanged', (location) => {
-    if (!location) return
-
-    const href = location.href?.split('#')[0]
-    setCurrentHref(href)
-
-    const chapter = hrefToChapterRef.current?.[href]
-    if (chapter) currentChapterRef.current = chapter
-
-    // CFI 타입 체크 후 문단 번호 추출
-    const cfiString = typeof location.start === 'string' ? location.start : location.start?.cfi
-    const paragraphMatch = cfiString?.match(/!\/4\/(\d+)/)
-    const paragraph = paragraphMatch ? Math.floor(parseInt(paragraphMatch[1]) / 2) : 0
-    currentParagraphRef.current = paragraph
-
-    if (setCurrentPRef.current) setCurrentPRef.current(paragraph)
-  })
-
-    // cleanup - 언마운트 시 마지막 위치 저장
     return () => {
       destroyed = true
 
@@ -248,19 +271,18 @@ function Viewer() {
         }
       }
 
-      setTimeout(() => {
-        if (destroyed) {
-          try { renditionRef.current?.destroy() } catch (e) {}
-          renditionRef.current = null
-          try { book?.destroy() } catch (e) {}
-          isInitializingRef.current = null
-        }
+      destroyTimeoutRef.current = setTimeout(() => {
+        try { renditionRef.current?.destroy() } catch (e) {}
+        renditionRef.current = null
+        try { book?.destroy() } catch (e) {}
+        isInitializingRef.current = null
+        destroyTimeoutRef.current = null
       }, 1000)
     }
   }, [epubUrl])
 
-  const goToChapter = (href) => {
-    renditionRef.current?.display(href)
+  const goToChapter = async (href) => {
+    await renditionRef.current?.display(href)
   }
 
   return (
@@ -401,7 +423,6 @@ function Viewer() {
                         : 'bg-gray-100 text-gray-800 rounded-bl-sm'
                     }`}>
                       {msg.content}
-                      {/* RAG 참고 문단 출처 표시 */}
                       {msg.context_refs?.length > 0 && (
                         <p className="text-gray-400 text-[10px] mt-1">
                           📖 {msg.context_refs.map(r => `${r.chapter_order}번째 목차 ${r.paragraph_order}번째 문단`).join(', ')} 참고

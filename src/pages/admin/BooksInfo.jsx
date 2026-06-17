@@ -13,29 +13,35 @@ import { getAdminBooks, updateBook } from "../../api";
 ============================================================ */
 
 function BookList({ books, onSelect }) {
+  // status가 READY인 도서만 필터링합니다.
+  const readyBooks = books.filter(book => book.status === "READY");
   return (
     <div>
       <h1 className="text-xl font-bold text-gray-900 mb-2">도서 정보 수정</h1>
       <p className="text-gray-400 text-sm mb-8">수정할 도서를 선택하세요</p>
       <div className="flex flex-wrap gap-6">
-        {books.map(book => (
-          <div
-            key={book.books_id}
-            onClick={() => onSelect(book)}
-            className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
-            style={{
-              backgroundImage: book.cover_url ? `url(${book.cover_url})` : "none",
-              backgroundColor: "#1A3C2E",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}
-          >
-            <div className="w-full bg-gradient-to-t from-black/70 to-transparent p-3">
-              <p className="text-white font-bold text-sm leading-tight">{book.title}</p>
-              <p className="text-white/60 text-xs mt-0.5">{book.author}</p>
+        {readyBooks.length > 0 ? (
+          readyBooks.map(book => (
+            <div
+              key={book.books_id}
+              onClick={() => onSelect(book)}
+              className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
+              style={{
+                backgroundImage: book.cover_url ? `url(${book.cover_url})` : "none",
+                backgroundColor: "#1A3C2E",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            >
+              <div className="w-full bg-gradient-to-t from-black/70 to-transparent p-3">
+                <p className="text-white font-bold text-sm leading-tight">{book.title}</p>
+                <p className="text-white/60 text-xs mt-0.5">{book.author}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-sm text-gray-400 py-10">수정 가능한 도서(READY)가 없습니다.</p>
+        )}
       </div>
     </div>
   );
@@ -75,12 +81,12 @@ function InputField({ label, name, value, onChange, type = "text", placeholder, 
 ============================================================ */
 
 function BookEditForm({ book, onBack }) {
+  // state에서 cover_url을 제외하여 내부 form 조작 대상을 명확히 분리합니다.
   const [form, setForm] = useState({
     title: book.title || "",
     author: book.author || "",
     publisher: book.publisher || "",
     published_year: String(book.published_year || ""),
-    cover_url: book.cover_url || "",
     isbn: book.isbn || "",
   });
   const [errors, setErrors] = useState({});
@@ -113,12 +119,12 @@ function BookEditForm({ book, onBack }) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
+      // API 전송 시 cover_url은 원래 도서 정보(book.cover_url)를 그대로 고정해 보냅니다.
       await updateBook(book.books_id, {
         title:          form.title,
         author:         form.author,
         publisher:      form.publisher,
         published_year: Number(form.published_year),
-        cover_url:      form.cover_url,
         isbn:           form.isbn,
       });
       setDirty(false);
@@ -173,14 +179,14 @@ function BookEditForm({ book, onBack }) {
         </div>
 
         <div className="px-6 pb-6 pt-5">
-          {/* 표지 미리보기 + URL */}
+          {/* 표지 미리보기 + URL (수정 불가 처리) */}
           <div className="mb-5">
             <label className="block text-xs font-medium text-gray-500 mb-1.5">표지 이미지</label>
             <div className="flex gap-4 items-start">
               <div className="w-16 h-24 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-content-center">
-                {form.cover_url ? (
+                {book.cover_url ? (
                   <img
-                    src={form.cover_url}
+                    src={book.cover_url}
                     alt="표지"
                     className="w-full h-full object-cover"
                     onError={e => { e.target.style.display = "none"; }}
@@ -193,12 +199,12 @@ function BookEditForm({ book, onBack }) {
                 <input
                   type="text"
                   name="cover_url"
-                  value={form.cover_url}
-                  onChange={handleChange}
-                  placeholder="https://example.com/cover.jpg"
-                  className="w-full h-10 border border-gray-200 rounded-lg px-3 text-sm text-gray-900 outline-none focus:border-green-800 focus:ring-2 focus:ring-green-50"
+                  value={book.cover_url || ""}
+                  readOnly
+                  placeholder="등록된 표지 이미지가 없습니다."
+                  className="w-full h-10 border border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed rounded-lg px-3 text-sm outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">URL 입력 시 왼쪽에 미리보기가 표시됩니다.</p>
+                <p className="text-xs text-gray-400 mt-1">표지 이미지 URL은 수정할 수 없습니다.</p>
               </div>
             </div>
           </div>
