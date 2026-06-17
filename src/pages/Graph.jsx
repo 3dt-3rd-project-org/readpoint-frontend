@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import cytoscape from 'cytoscape'
 import { Plus, Minus, Maximize2, Save } from 'lucide-react'
-import { getBooks, getBookRelations, getBookChapters, getBookEvents } from '../api'
+import { getBooks, getBookRelations, getBookChapters, getBookEvents, getBookmarkByUserId } from '../api'
 
 function Graph() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -22,6 +22,9 @@ function Graph() {
   const [controlsCollapsed, setControlsCollapsed] = useState(false)
   const [chapters, setChapters] = useState([])
   const [events, setEvents] = useState([])
+
+  // 유저 읽기 진도 (스포일러 방지 기준)
+  const [userProgress, setUserProgress] = useState(null)
 
   // 사건 검색 필터 (프론트 필터링)
   const filteredEvents = events.filter(ev =>
@@ -49,8 +52,8 @@ function Graph() {
     cyInstance.current.nodes().forEach(n => {
       positions[n.id()] = n.position()
     })
-    const p = selectedEvent?.start_paragraph_order || 9999
-    const c = selectedEvent ? selectedEvent.chapter_order : 100
+    const p = selectedEvent?.start_paragraph_order || userProgress?.paragraph_order || 9999
+    const c = selectedEvent ? selectedEvent.chapter_order : userProgress?.chapter_order || 100
     localStorage.setItem(`graph-positions-${bookId}-${c}-${p}`, JSON.stringify(positions))
     setIsDirty(false)
   }
@@ -75,6 +78,14 @@ function Graph() {
     })
   }, [bookId])
 
+  // 유저 읽기 진도 조회 - 관계도 스포일러 방지 기준
+  useEffect(() => {
+    if (!bookId) return
+    getBookmarkByUserId(bookId)
+      .then(data => setUserProgress(data))
+      .catch(() => setUserProgress(null))
+  }, [bookId])
+
   // 사건 목록 조회 - 챕터 변경 시 초기화
   useEffect(() => {
     if (!bookId) return
@@ -82,7 +93,7 @@ function Graph() {
       const filtered = (data.events || [])
         .filter(e => e.chapter_order === currentChapter)
         .sort((a, b) => a.event_order - b.event_order)
-        .map((ev, idx) => ({ ...ev, event_order: idx + 1 })) // 1부터 재번호매김
+        .map((ev, idx) => ({ ...ev, event_order: idx + 1 }))
       setEvents(filtered)
     })
     setSelectedNode(null)
@@ -95,8 +106,10 @@ function Graph() {
     if (!bookId || !cyRef.current) return
 
     let cancelled = false
-    const p = selectedEvent?.start_paragraph_order || 9999
-    const c = selectedEvent ? selectedEvent.chapter_order : 100
+
+    // 사건 선택 시 해당 시점, 아니면 유저 읽기 진도 기준으로 관계도 조회
+    const p = selectedEvent?.start_paragraph_order || userProgress?.paragraph_order || 9999
+    const c = selectedEvent ? selectedEvent.chapter_order : userProgress?.chapter_order || 100
 
     // 기존 인스턴스 정리
     if (cyInstance.current) {
@@ -232,7 +245,6 @@ function Graph() {
         // 노드 드래그 시 미저장 상태 표시
         cy.on('dragfree', 'node', () => setIsDirty(true))
 
-
         // 저장된 노드 위치 복원
         const savedPositions = localStorage.getItem(`graph-positions-${bookId}-${c}-${p}`)
         if (savedPositions) {
@@ -267,7 +279,7 @@ function Graph() {
       }
       setGraphNodes([])
     }
-  }, [bookId, currentChapter, selectedEvent])
+  }, [bookId, currentChapter, selectedEvent, userProgress])
 
   // 책 선택 화면
   if (!bookId) {
