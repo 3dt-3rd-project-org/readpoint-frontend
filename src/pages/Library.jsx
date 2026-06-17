@@ -153,8 +153,26 @@ useEffect(() => {
     return () => window.removeEventListener('tooltipStepChange', handler)
   }, [])
 
-  if (loading) return <div className="p-10 text-gray-400 text-center">로딩 중...</div>
-
+  if (loading) return (
+    <div className="px-24 py-10">
+      <div className="flex gap-6 mb-8">
+        <div className="h-7 w-24 bg-gray-200 rounded animate-pulse" />
+        <div className="h-7 w-24 bg-gray-200 rounded animate-pulse" />
+      </div>
+      <div className="flex gap-10 flex-wrap">
+        {Array(4).fill(0).map((_, i) => (
+          <div key={i} className="w-80 rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="h-60 bg-gray-200 animate-pulse" />
+            <div className="p-5">
+              <div className="h-4 w-40 bg-gray-200 rounded animate-pulse mb-2" />
+              <div className="h-3 w-24 bg-gray-200 rounded animate-pulse mb-3" />
+              <div className="h-1.5 w-full bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
   return (
     <div className="flex">
       <div className={`transition-all duration-300 ${selectedBook ? 'w-[calc(100%-500px)]' : 'w-full'} px-24 py-10`}>
