@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Search, Network, MapPin, FileText, ChevronRight } from 'lucide-react'
+import { BookOpen, Search, Network, MapPin, FileText, ChevronRight, Star } from 'lucide-react'
 import { getBooks, getAllBooks, getBookChapters, getSummaryByUserId  } from '../api'
 
 const TOOLTIP_STEPS = [
@@ -47,6 +47,7 @@ function Library() {
   const [tab, setTab] = useState('shelf')
   const [searchTerm, setSearchTerm] = useState('')
   const [searchType, setSearchType] = useState('title')
+  const [expandSummary, setExpandSummary] = useState(false)
   const [tooltipStep, setTooltipStep] = useState(() => {
     if (localStorage.getItem('onboardingDone')) return null
     const saved = localStorage.getItem('tooltipStep')
@@ -301,7 +302,17 @@ useEffect(() => {
                   <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
                     <FileText size={12} /> 줄거리 요약
                   </p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{summary || '요약 정보가 없습니다.'}</p>
+                  <p className={`text-sm text-gray-700 leading-relaxed ${expandSummary ? '' : 'line-clamp-5'}`}>
+                    {summary || '요약 정보가 없습니다.'}
+                  </p>
+                  {summary && summary.length > 200 && (
+                    <button
+                      onClick={() => setExpandSummary(!expandSummary)}
+                      className="text-xs text-green-800 font-semibold mt-1 hover:underline"
+                    >
+                      {expandSummary ? '접기' : '더 보기'}
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-3 mb-3">
                     <button
@@ -317,7 +328,7 @@ useEffect(() => {
                     </button>
                   <button
                     onClick={() => navigate(`/viewer/${selectedBook.books_id}`)}
-                    className="flex-1 bg-gray-100 text-gray-500 rounded-full py-3 hover:bg-gray-200 transition-colors"
+                    className="flex-1 border border-gray-300 text-gray-600 rounded-full py-3 hover:bg-gray-50 transition-colors"
                   >
                     처음부터
                   </button>
@@ -344,6 +355,13 @@ function BookGrid({ books, selectedBook, setSelectedBook, tooltipStep, handleToo
         const hasCover = book.cover_url && book.cover_url.trim() !== ""
         return (
           <div key={book.books_id} className="relative">
+              {/* 완독 뱃지 */}
+              {book.progress >= 85 && (
+                <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Star size={15} fill="white" />
+                  완독
+                </div>
+              )}
             {tooltipStep === 2 && idx === 0 && (
               <Tooltip
                 icon={<BookOpen size={14} />}
