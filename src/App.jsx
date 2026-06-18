@@ -6,7 +6,6 @@ import GNB from './components/GNB'
 import Auth from './pages/auth/Auth'
 import Viewer from './pages/view/Viewer'
 import Dashboard from './pages/admin/Dashboard'
-import Spoiler from './pages/admin/Spoiler'
 import Review from './pages/admin/Review'
 import AdminLayout from './components/AdminLayout'
 import Callback from './pages/auth/Callback'
@@ -29,7 +28,6 @@ function App() {
         <Route path="/admin" element={<AdminLayout><Dashboard /></AdminLayout>} />
         <Route path="/admin/booksinfo" element={<AdminLayout><BooksInfo /></AdminLayout>} />
         <Route path="/admin/review" element={<AdminLayout><Review /></AdminLayout>} />
-        <Route path="/admin/spoiler" element={<AdminLayout><Spoiler /></AdminLayout>} />
         <Route path="/admin/summary" element={<AdminLayout><Summary /></AdminLayout>} />
         <Route path="/admin/settings" element={<AdminLayout><div className="p-8"><h1 className="text-xl font-bold">설정</h1></div></AdminLayout>} />
       </Routes>

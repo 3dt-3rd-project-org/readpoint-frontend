@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, CheckCircle } from 'lucide-react'
-import { getAdminBooks, getBookSummaryForReview, updateBookSummaryForReview } from '../../api'
-
+import { getAdminBooks, getBookSummaryForReview, updateBookSummaryForReview, approveSummary } from '../../api'
 // 검수 페이지에 노출할 책의 상태값 (요약 생성이 끝난 책만 대상)
 const REVIEWABLE_STATUS = 'SUMMARIZING_COMPLETE'
 
 function SummaryReview() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams() 
   const [books, setBooks] = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [summaries, setSummaries] = useState([])
@@ -21,7 +21,14 @@ function SummaryReview() {
     getAdminBooks()
       .then(data => {
         const allBooks = data.books || []
-        setBooks(allBooks.filter(b => b.status === REVIEWABLE_STATUS))
+        const filtered = allBooks.filter(b => b.status === REVIEWABLE_STATUS)
+        setBooks(filtered)
+
+        const bookId = searchParams.get('bookId')
+        if (bookId) {
+          const found = filtered.find(b => String(b.books_id) === String(bookId))
+          if (found) handleBookSelect(found)
+        }
       })
       .catch(err => console.error(err))
   }, [])
@@ -71,7 +78,19 @@ function SummaryReview() {
           return
         }
       }
-      alert('검수가 완료되었습니다!')
+
+      // COMPLETE 신호 전송
+      await approveSummary(selectedBook.books_id)
+
+      // 대시보드 로그에 기록
+      const newLog = {
+        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        type: 'success',
+        text: `${selectedBook.title} 도서가 성공적으로 배포되었습니다.`
+      }
+      const existing = JSON.parse(localStorage.getItem('pipeline_logs') || '[]')
+      localStorage.setItem('pipeline_logs', JSON.stringify([newLog, ...existing].slice(0, 50)))
+
       navigate('/admin')
     } catch (err) {
       console.error(err)

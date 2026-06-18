@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview, summarizeBook } from '../../api'
 
@@ -733,6 +733,7 @@ function StepSection({ step, index, status, onComplete, children, readOnly }) {
 
 function Review() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [books, setBooks]               = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [stepStatus, setStepStatus]     = useState(initialStepStatus)
@@ -828,13 +829,21 @@ function Review() {
         return
       }
 
-      alert('최종 승인 완료')
-    } catch (err) {
-      alert(`최종 승인 실패: ${err.message}`)
-    } finally {
-      setApproving(false)
+    const newLog = {
+      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: 'running',
+      text: '2차 요약 파이프라인이 시작되었습니다. 약 30분 소요 예정'
     }
+    const existing = JSON.parse(localStorage.getItem('pipeline_logs') || '[]')
+    localStorage.setItem('pipeline_logs', JSON.stringify([newLog, ...existing].slice(0, 50)))
+
+    navigate('/admin')
+  } catch (err) {
+    alert(`최종 승인 실패: ${err.message}`)
+  } finally {
+    setApproving(false)
   }
+}
 
   if (!selectedBook) {
     return (

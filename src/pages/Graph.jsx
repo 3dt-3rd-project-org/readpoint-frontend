@@ -52,8 +52,8 @@ function Graph() {
     cyInstance.current.nodes().forEach(n => {
       positions[n.id()] = n.position()
     })
-    const p = selectedEvent?.start_paragraph_order || userProgress?.paragraph_order || 9999
-    const c = selectedEvent ? selectedEvent.chapter_order : userProgress?.chapter_order || 100
+    const p = selectedEvent?.start_paragraph_order ?? userProgress?.progress?.paragraph_order ?? 9999
+    const c = selectedEvent ? selectedEvent.chapter_order : (userProgress?.progress?.chapter_order ?? 100)
     localStorage.setItem(`graph-positions-${bookId}-${c}-${p}`, JSON.stringify(positions))
     setIsDirty(false)
   }
@@ -86,6 +86,12 @@ function Graph() {
       .catch(() => setUserProgress(null))
   }, [bookId])
 
+  // userProgress 로드되면 currentChapter 초기화
+  useEffect(() => {
+    if (!userProgress?.progress?.chapter_order) return
+    setCurrentChapter(userProgress.progress.chapter_order)
+  }, [userProgress])
+
   // 사건 목록 조회 - 챕터 변경 시 초기화
   useEffect(() => {
     if (!bookId) return
@@ -108,8 +114,8 @@ function Graph() {
     let cancelled = false
 
     // 사건 선택 시 해당 시점, 아니면 유저 읽기 진도 기준으로 관계도 조회
-    const p = selectedEvent?.start_paragraph_order || userProgress?.paragraph_order || 9999
-    const c = selectedEvent ? selectedEvent.chapter_order : userProgress?.chapter_order || 100
+    const p = selectedEvent?.start_paragraph_order ?? userProgress?.progress?.paragraph_order ?? 9999
+    const c = selectedEvent ? selectedEvent.chapter_order : (userProgress?.progress?.chapter_order ?? 100)
 
     // 기존 인스턴스 정리
     if (cyInstance.current) {
@@ -337,11 +343,13 @@ function Graph() {
                 onChange={(e) => handleChapterChange(Number(e.target.value))}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-800 outline-none focus:border-green-800 focus:ring-1 focus:ring-green-800 cursor-pointer"
               >
-                {chapters.map(ch => (
-                  <option key={ch.chapter_id} value={ch.chapter_order}>
-                    {ch.title || `제 ${ch.chapter_order} 장`}
-                  </option>
-                ))}
+                {chapters
+                  .filter(ch => ch.chapter_order <= (userProgress?.progress?.chapter_order ?? 999))
+                  .map(ch => (
+                    <option key={ch.chapter_id} value={ch.chapter_order}>
+                      {ch.title || `제 ${ch.chapter_order} 장`}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -484,7 +492,6 @@ function Graph() {
                 </div>
               </div>
             ) : (
-              /* 전체 인물 목록 그리드 */
               <div className="grid grid-cols-3 gap-3">
                 {graphNodes.length > 0 ? (
                   graphNodes.map(char => (
