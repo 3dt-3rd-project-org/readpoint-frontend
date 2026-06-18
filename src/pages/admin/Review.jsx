@@ -30,8 +30,6 @@ const STEPS = [
   { key: 'events',     label: '사건 검수' },
 ]
 
-const navigate = useNavigate();
-
 const initialStepStatus = { characters: 'active', relations: 'pending', events: 'pending' }
 
 // 검수 페이지에 노출할 책의 상태값
@@ -883,22 +881,20 @@ function Review() {
         return
       }
 
-    const newLog = {
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      type: 'running',
-      text: '2차 요약 파이프라인이 시작되었습니다. 약 30분 소요 예정'
-
+      const newLog = {
+        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        type: 'running',
+        text: '2차 요약 파이프라인이 시작되었습니다. 약 30분 소요 예정'
+      }
+      const existing = JSON.parse(localStorage.getItem('pipeline_logs') || '[]')
+      localStorage.setItem('pipeline_logs', JSON.stringify([newLog, ...existing].slice(0, 50)))
+      navigate('/admin')
+    } catch (err) {
+      alert(`최종 승인 실패: ${err.message}`)
+    } finally {
+      setApproving(false)
     }
-    const existing = JSON.parse(localStorage.getItem('pipeline_logs') || '[]')
-    localStorage.setItem('pipeline_logs', JSON.stringify([newLog, ...existing].slice(0, 50)))
-
-    navigate('/admin')
-  } catch (err) {
-    alert(`최종 승인 실패: ${err.message}`)
-  } finally {
-    setApproving(false)
-  }
-}
+  } 
 
   if (!selectedBook) {
     return (
