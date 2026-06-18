@@ -1,22 +1,25 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+// 🌟 useSearchParams를 명확히 활용하기 위해 로드
+import { useNavigate, useSearchParams } from "react-router-dom"; 
 import { ChevronLeft, CheckCircle } from 'lucide-react'
 import { getAdminBooks, getBookSummaryForReview, updateBookSummaryForReview } from '../../api'
 
-// 검수 페이지에 노출할 책의 상태값 (요약 생성이 끝난 책만 대상)
 const REVIEWABLE_STATUS = 'SUMMARIZING_COMPLETE'
 
 function SummaryReview() {
   const navigate = useNavigate()
+  // 🌟 URL 쿼리 스트링(?bookId=51)을 처리하기 위한 훅 선언
+  const [searchParams, setSearchParams] = useSearchParams()
+  const bookIdParam = searchParams.get('bookId')
+
   const [books, setBooks] = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [summaries, setSummaries] = useState([])
   const [editMap, setEditMap] = useState({})
   const [loading, setLoading] = useState(false)
-
-  // 저장 = 검수 완료. 별도의 승인 단계는 없음.
   const [submitting, setSubmitting] = useState(false)
 
+  // 1. 컴포넌트 마운트 시 전체 검수 가능 도서 목록 가져오기
   useEffect(() => {
     getAdminBooks()
       .then(data => {
@@ -26,11 +29,30 @@ function SummaryReview() {
       .catch(err => console.error(err))
   }, [])
 
-  const handleBookSelect = async (book) => {
+  // 🌟 2. URL 파라미터(bookId) 또는 도서 목록(books) 데이터가 변경되었을 때 상태 동기화
+  useEffect(() => {
+    if (bookIdParam && books.length > 0) {
+      const found = books.find(b => String(b.books_id) === String(bookIdParam))
+      if (found) {
+        // 이미 선택된 책과 동일하다면 API 중복 호출 방지
+        if (selectedBook?.books_id !== found.books_id) {
+          fetchBookSummaries(found)
+        }
+      } else {
+        alert('해당 도서를 찾을 수 없거나 검수 가능한 상태가 아닙니다.')
+        setSearchParams({}) // 유효하지 않은 ID면 쿼리 스트링 제거
+      }
+    } else if (!bookIdParam) {
+      setSelectedBook(null)
+      setSummaries([])
+    }
+  }, [bookIdParam, books])
+
+  // 🌟 요약 데이터를 불러오는 함수 분리 (useEffect와 일반 클릭 이벤트에서 재활용)
+  const fetchBookSummaries = async (book) => {
     setSelectedBook(book)
     setEditMap({})
     setLoading(true)
-
     try {
       const data = await getBookSummaryForReview(book.books_id)
       setSummaries(data.summaries || [])
@@ -40,6 +62,12 @@ function SummaryReview() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // 목록에서 책 카드 클릭 시 실행되는 핸들러 (URL 주소 변경)
+  const handleBookSelect = (book) => {
+    // 🌟 직접 상태를 바꾸지 않고 URL을 ?bookId=XX 형태로 이동시킵니다.
+    navigate(`/admin/summary-review?bookId=${book.books_id}`) 
   }
 
   const getEdit = (id) => editMap[id] || {}
@@ -53,7 +81,6 @@ function SummaryReview() {
 
   const isDirty = (id) => Object.keys(editMap[id] || {}).length > 0
 
-  // 저장 = 검수 완료. updateBookSummaryForReview 호출 한 번으로 끝남.
   const handleCompleteReview = async () => {
     const updatedList = summaries
       .filter(s => isDirty(s.progress_summary_id))
@@ -72,7 +99,7 @@ function SummaryReview() {
         }
       }
       alert('검수가 완료되었습니다!')
-      navigate('/admin')
+      navigate('/admin') // 최종 대시보드로 이동
     } catch (err) {
       console.error(err)
       alert('검수 완료 중 오류가 발생했습니다.')
@@ -94,7 +121,7 @@ function SummaryReview() {
             {books.map(book => (
               <div
                 key={book.books_id}
-                onClick={() => handleBookSelect(book)}
+                onClick={() => handleBookSelect(book)} // URL 변경 호출
                 className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
                 style={{
                   backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
@@ -118,7 +145,8 @@ function SummaryReview() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setSelectedBook(null)}
+            // 🌟 뒤로가기 시 쿼리 스트링을 날려 목록 화면이 나오게 처리
+            onClick={() => navigate('/admin/summary-review')} 
             className="flex items-center gap-1 text-sm text-green-800 font-semibold hover:text-green-600"
           >
             <ChevronLeft size={16} />

@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
 import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview, summarizeBook } from '../../api'
 
@@ -29,6 +29,8 @@ const STEPS = [
   { key: 'relations',  label: '관계 검수' },
   { key: 'events',     label: '사건 검수' },
 ]
+
+const navigate = useNavigate();
 
 const initialStepStatus = { characters: 'active', relations: 'pending', events: 'pending' }
 
@@ -879,8 +881,8 @@ function Review() {
         alert(`최종 승인 실패: ${res.message}`)
         return
       }
-
       alert('최종 승인 완료')
+      navigate('/admin')
     } catch (err) {
       alert(`최종 승인 실패: ${err.message}`)
     } finally {

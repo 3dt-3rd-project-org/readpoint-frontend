@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate, useSearchParams } from "react-router-dom"; 
 import { getAdminBooks, updateBook, analyzeBook } from "../../api";
 
 /* ============================================================
@@ -304,16 +304,39 @@ function BookEditForm({ book, onBack }) {
    메인 컴포넌트
 ============================================================ */
 function BooksInfo() {
+  const navigate = useNavigate();
+  // 🌟 2. URL의 쿼리 스트링(?bookId=51)을 읽고 쓰기 위한 훅을 선언합니다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // URL에서 ?bookId=XX 값을 가져옵니다. (없으면 null)
+  const bookIdParam = searchParams.get("bookId");
+
   const [books, setBooks]           = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [loadingBooks, setLoadingBooks] = useState(true);
 
+  // 1. API로 전체 도서 목록 가져오기
   useEffect(() => {
     getAdminBooks()
       .then(data => setBooks(data.books || []))
       .catch(err => console.error(err))
       .finally(() => setLoadingBooks(false));
   }, []);
+
+  // 🌟 3. URL의 ?bookId= 값이 바뀌면 자동으로 selectedBook 객체를 매핑해 줍니다.
+  useEffect(() => {
+    if (bookIdParam && books.length > 0) {
+      const found = books.find(b => String(b.books_id) === String(bookIdParam));
+      if (found) {
+        setSelectedBook(found);
+      } else {
+        alert("해당 도서를 찾을 수 없습니다.");
+        setSearchParams({}); // 올바르지 않은 ID면 쿼리 스트링 초기화
+      }
+    } else if (!bookIdParam) {
+      setSelectedBook(null); // bookId 파라미터가 없으면 목록 상태로 변경
+    }
+  }, [bookIdParam, books, setSearchParams]);
 
   if (loadingBooks) {
     return (
@@ -326,11 +349,13 @@ function BooksInfo() {
     );
   }
 
+  // 🌟 4. selectedBook이 없을 때는 목록을 보여주고, 카드 클릭 시 URL을 ?bookId=XX로 바꿉니다.
   if (!selectedBook) {
     return (
       <BookList
         books={books}
-        onSelect={(book) => setSelectedBook(book)}
+        // 카드 클릭 시 /admin/booksinfo?bookId=51 형태로 이동하게 만듭니다.
+        onSelect={(book) => navigate(`/admin/booksinfo?bookId=${book.books_id}`)}
       />
     );
   }
@@ -338,7 +363,8 @@ function BooksInfo() {
   return (
     <BookEditForm
       book={selectedBook}
-      onBack={() => setSelectedBook(null)}
+      // 🌟 5. 뒤로가기 버튼을 누르면 쿼리 스트링을 지우고 기본 목록 페이지 주소로 이동합니다.
+      onBack={() => navigate("/admin/booksinfo")}
     />
   );
 }
