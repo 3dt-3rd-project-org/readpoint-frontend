@@ -114,12 +114,14 @@ useEffect(() => {
 
 
   const handleTooltipNext = () => {
+    console.log('현재 tooltipStep:', tooltipStep)
     if (tooltipStep >= TOOLTIP_STEPS.length + 1) {
       localStorage.setItem('onboardingDone', 'true')
       localStorage.removeItem('tooltipStep')
       setTooltipStep(null)
     } else {
       const next = (tooltipStep ?? 2) + 1
+      console.log('다음 tooltipStep:', next)
       localStorage.setItem('tooltipStep', next)
       setTooltipStep(next)
     }

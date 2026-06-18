@@ -66,6 +66,16 @@ function Auth() {
       startGoogleAuth(loginType)
     }
   }
+  
+  const handleSignup = () => {
+  if (alreadyAgreed) {
+    alert('이미 가입된 계정입니다.')
+    startGoogleAuth('user')
+    return
+  }
+  setPendingLoginType('user')
+  setModal('privacy_agree')
+}
 
   const handleAgree = () => {
     localStorage.setItem('privacyAgreed', 'true')
@@ -212,10 +222,7 @@ function Auth() {
 
           <p className="mt-4 text-center text-xs text-gray-400">
             <button
-              onClick={() => {
-                setPendingLoginType('user')
-                setModal('privacy_agree')
-              }}
+              onClick={handleSignup}
               className="text-green-900 font-semibold hover:underline"
             >
               회원가입
