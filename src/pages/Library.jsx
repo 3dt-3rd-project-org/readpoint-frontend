@@ -315,7 +315,6 @@ useEffect(() => {
                 <div className="bg-gray-100 rounded-full h-1.5 mb-2">
                   <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${selectedBook.progress || 0}%` }} />
                 </div>
-                <p className="text-xs text-gray-400 mb-5">{selectedBook.progress || 0}% · 마지막 독서: 최근</p>
                 <div className="border-t border-gray-100 pt-5 mb-6">
                   <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
                     <FileText size={12} /> 줄거리 요약

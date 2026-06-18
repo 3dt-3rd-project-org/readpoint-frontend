@@ -71,10 +71,9 @@ function SummaryReview() {
   }
 
   // 목록에서 책 카드 클릭 시 실행되는 핸들러 (URL 주소 변경)
-  const handleBookSelect = (book) => {
-    // 🌟 직접 상태를 바꾸지 않고 URL을 ?bookId=XX 형태로 이동시킵니다.
-    navigate(`/admin/summary-review?bookId=${book.books_id}`) 
-  }
+const handleBookSelect = (book) => {
+  navigate(`/admin/summary?bookId=${book.books_id}`)
+}
 
   const getEdit = (id) => editMap[id] || {}
 
@@ -125,7 +124,7 @@ function SummaryReview() {
       setSubmitting(false)
     }
   }
-  
+
   // 책 선택 화면
   if (!selectedBook) {
     return (
@@ -163,8 +162,7 @@ function SummaryReview() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            // 🌟 뒤로가기 시 쿼리 스트링을 날려 목록 화면이 나오게 처리
-            onClick={() => navigate('/admin/summary-review')} 
+            onClick={() => navigate('/admin/summary')}
             className="flex items-center gap-1 text-sm text-green-800 font-semibold hover:text-green-600"
           >
             <ChevronLeft size={16} />
