@@ -1,17 +1,28 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, CheckCircle } from 'lucide-react'
 import { getAdminBooks, getBookSummaryForReview, updateBookSummaryForReview } from '../../api'
 
+// 검수 페이지에 노출할 책의 상태값 (요약 생성이 끝난 책만 대상)
+const REVIEWABLE_STATUS = 'SUMMARIZING_COMPLETE'
+
 function SummaryReview() {
+  const navigate = useNavigate()
   const [books, setBooks] = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [summaries, setSummaries] = useState([])
   const [editMap, setEditMap] = useState({})
   const [loading, setLoading] = useState(false)
 
+  // 저장 = 검수 완료. 별도의 승인 단계는 없음.
+  const [submitting, setSubmitting] = useState(false)
+
   useEffect(() => {
     getAdminBooks()
-      .then(data => setBooks(data.books || []))
+      .then(data => {
+        const allBooks = data.books || []
+        setBooks(allBooks.filter(b => b.status === REVIEWABLE_STATUS))
+      })
       .catch(err => console.error(err))
   }, [])
 
@@ -42,6 +53,7 @@ function SummaryReview() {
 
   const isDirty = (id) => Object.keys(editMap[id] || {}).length > 0
 
+  // 저장 = 검수 완료. updateBookSummaryForReview 호출 한 번으로 끝남.
   const handleCompleteReview = async () => {
     const updatedList = summaries
       .filter(s => isDirty(s.progress_summary_id))
@@ -50,6 +62,7 @@ function SummaryReview() {
         summary_3line: editMap[s.progress_summary_id]?.summary_3line ?? s.summary_3line
       }))
 
+    setSubmitting(true)
     try {
       if (updatedList.length > 0) {
         const res = await updateBookSummaryForReview(selectedBook.books_id, { summaries: updatedList })
@@ -59,10 +72,12 @@ function SummaryReview() {
         }
       }
       alert('검수가 완료되었습니다!')
-      setSelectedBook(null)
+      navigate('/admin')
     } catch (err) {
       console.error(err)
       alert('검수 완료 중 오류가 발생했습니다.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -72,23 +87,27 @@ function SummaryReview() {
       <div className="p-6">
         <h1 className="text-xl font-bold text-gray-900 mb-2">3줄 요약 검수</h1>
         <p className="text-gray-400 text-sm mb-8">책을 선택해서 요약 데이터를 검수하세요</p>
-        <div className="flex gap-6 flex-wrap">
-          {books.map(book => (
-            <div
-              key={book.books_id}
-              onClick={() => handleBookSelect(book)}
-              className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
-              style={{
-                backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
-                backgroundColor: '#1A3C2E',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <p className="text-white font-bold text-sm p-4">{book.title}</p>
-            </div>
-          ))}
-        </div>
+        {books.length === 0 ? (
+          <p className="text-sm text-gray-400">검수 가능한 책이 없습니다.</p>
+        ) : (
+          <div className="flex gap-6 flex-wrap">
+            {books.map(book => (
+              <div
+                key={book.books_id}
+                onClick={() => handleBookSelect(book)}
+                className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
+                style={{
+                  backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
+                  backgroundColor: '#1A3C2E',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                <p className="text-white font-bold text-sm p-4">{book.title}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -112,10 +131,11 @@ function SummaryReview() {
 
         <button
           onClick={handleCompleteReview}
-          className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-colors bg-green-900 text-white hover:bg-green-800 cursor-pointer"
+          disabled={submitting}
+          className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-colors bg-green-900 text-white hover:bg-green-800 disabled:opacity-50 cursor-pointer"
         >
           <CheckCircle size={14} />
-          검수 완료
+          {submitting ? '저장 중…' : '검수 완료'}
         </button>
       </div>
 

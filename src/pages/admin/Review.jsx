@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { useEffect, useState, useCallback } from 'react'
-import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview } from '../../api'
+import { getAdminBooks, getBookCharactersForReview, getBookRelationsForReview, getBookEventsForReview, approveAnalysisForReview, summarizeBook } from '../../api'
 
 async function fetchCharacters(bookId) {
   await new Promise(r => setTimeout(r, 500));
@@ -20,11 +20,6 @@ async function fetchEvents(bookId) {
   return response?.events || []; 
 }
 
-async function submitStepData(bookId, stepKey, data) {
-  await new Promise(r => setTimeout(r, 600))
-  return { success: true }
-}
-
 /* ============================================================
    상수
 ============================================================ */
@@ -36,6 +31,11 @@ const STEPS = [
 ]
 
 const initialStepStatus = { characters: 'active', relations: 'pending', events: 'pending' }
+
+// 검수 페이지에 노출할 책의 상태값
+// - ANALYZING_FINISHED: 1차 검수 전. 인물/관계/사건 수정 가능. 저장 후에만 최종 승인 가능.
+// - ANALYZING_COMPLETE: 1차 검수 완료. 읽기 전용. 저장 없이 바로 최종 승인 가능.
+const REVIEWABLE_STATUSES = ['ANALYZING_FINISHED', 'ANALYZING_COMPLETE']
 
 /* ============================================================
    훅: 단계별 데이터 로딩
@@ -135,9 +135,10 @@ function ErrorRow({ message, onRetry }) {
 
 /* ============================================================
    서브 컴포넌트: CharacterTable
+   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
 ============================================================ */
 
-function CharacterTable({ characters, setCharacters, loading, error, onRetry }) {
+function CharacterTable({ characters, setCharacters, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm]   = useState({})
   const [bulkMode, setBulkMode]   = useState(false)
@@ -184,25 +185,27 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">검수 대상: {rows ? rows.length : 0}명</p>
-        <div className="flex gap-2">
-          {bulkMode ? (
-            <>
-              <button onClick={saveBulk}
-                className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                전체 저장
+        {!readOnly && (
+          <div className="flex gap-2">
+            {bulkMode ? (
+              <>
+                <button onClick={saveBulk}
+                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
+                  전체 저장
+                </button>
+                <button onClick={cancelBulk}
+                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
+                  취소
+                </button>
+              </>
+            ) : (
+              <button onClick={enterBulk}
+                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
+                전체 수정
               </button>
-              <button onClick={cancelBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                취소
-              </button>
-            </>
-          ) : (
-            <button onClick={enterBulk}
-              className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-              전체 수정
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -219,7 +222,7 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
               ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
               ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
           >
-            {bulkMode ? (
+            {!readOnly && bulkMode ? (
               <>
                 <input value={char.character_name || ''} onChange={e => updateDraft(char.character_id, 'character_name', e.target.value)}
                   className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
@@ -229,7 +232,7 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
                   className="border border-gray-200 rounded px-2 py-1 text-xs w-[95%]" />
                 <span className="text-right text-xs text-gray-300">-</span>
               </>
-            ) : editingId === char.character_id ? (
+            ) : !readOnly && editingId === char.character_id ? (
               <>
                 <input value={editForm.character_name || ''} onChange={e => setEditForm(p => ({ ...p, character_name: e.target.value }))}
                   className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
@@ -248,10 +251,14 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
                 <span className="text-gray-500">{char.role}</span>
                 <span className="text-gray-500 text-xs line-clamp-1 pr-4" title={char.description}>{char.description}</span>
                 <div className="text-right">
-                  <button onClick={() => handleEdit(char)}
-                    className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200 transition-colors">
-                    수정
-                  </button>
+                  {readOnly ? (
+                    <span className="text-xs text-gray-300">-</span>
+                  ) : (
+                    <button onClick={() => handleEdit(char)}
+                      className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200 transition-colors">
+                      수정
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -264,9 +271,10 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry }) 
 
 /* ============================================================
    서브 컴포넌트: RelationTable
+   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
 ============================================================ */
 
-function RelationTable({ data: relations, setData: setRelations, loading, error, onRetry }) {
+function RelationTable({ data: relations, setData: setRelations, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [bulkMode, setBulkMode] = useState(false)
@@ -311,25 +319,27 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
     <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{rows.length}개 관계</p>
-        <div className="flex gap-2">
-          {bulkMode ? (
-            <>
-              <button onClick={saveBulk}
-                className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                전체 저장
+        {!readOnly && (
+          <div className="flex gap-2">
+            {bulkMode ? (
+              <>
+                <button onClick={saveBulk}
+                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
+                  전체 저장
+                </button>
+                <button onClick={cancelBulk}
+                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
+                  취소
+                </button>
+              </>
+            ) : (
+              <button onClick={enterBulk}
+                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
+                전체 수정
               </button>
-              <button onClick={cancelBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                취소
-              </button>
-            </>
-          ) : (
-            <button onClick={enterBulk}
-              className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-              전체 수정
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-[800px]">
@@ -357,7 +367,7 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
               </span>
             </div>
 
-            {bulkMode ? (
+            {!readOnly && bulkMode ? (
               <>
                 <div className="col-span-2">
                   <input 
@@ -396,7 +406,7 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
                   수정 중
                 </div>
               </>
-            ) : editingId === rel.relationship_change_id ? (
+            ) : !readOnly && editingId === rel.relationship_change_id ? (
               <>
                 <div className="col-span-2">
                   <input 
@@ -459,7 +469,11 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
                   )}
                 </div>
                 <div className="col-span-2 text-right">
-                  <button onClick={() => handleEdit(rel)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                  {readOnly ? (
+                    <span className="text-xs text-gray-300">-</span>
+                  ) : (
+                    <button onClick={() => handleEdit(rel)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                  )}
                 </div>
               </>
             )}
@@ -474,9 +488,10 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
    서브 컴포넌트: EventTable
    - 유형(event_type) 컬럼 제거
    - 챕터 ID 읽기 전용 (수정 불가)
+   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
 ============================================================ */
 
-function EventTable({ data: events, setData: setEvents, loading, error, onRetry }) {
+function EventTable({ data: events, setData: setEvents, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [bulkMode, setBulkMode] = useState(false)
@@ -520,25 +535,27 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{rows.length}개 사건</p>
-        <div className="flex gap-2">
-          {bulkMode ? (
-            <>
-              <button onClick={saveBulk}
-                className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                전체 저장
+        {!readOnly && (
+          <div className="flex gap-2">
+            {bulkMode ? (
+              <>
+                <button onClick={saveBulk}
+                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
+                  전체 저장
+                </button>
+                <button onClick={cancelBulk}
+                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
+                  취소
+                </button>
+              </>
+            ) : (
+              <button onClick={enterBulk}
+                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
+                전체 수정
               </button>
-              <button onClick={cancelBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                취소
-              </button>
-            </>
-          ) : (
-            <button onClick={enterBulk}
-              className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-              전체 수정
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -557,7 +574,7 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
               ${evt.is_core_event ? 'bg-yellow-50/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
               ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
           >
-            {bulkMode ? (
+            {!readOnly && bulkMode ? (
               <>
                 {/* 사건명 (유형 제거) */}
                 <div className="pr-2">
@@ -587,7 +604,7 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
 
                 <span className="text-gray-300 text-xs">-</span>
               </>
-            ) : editingId === evt.event_id ? (
+            ) : !readOnly && editingId === evt.event_id ? (
               <>
                 {/* 사건명 (유형 제거) */}
                 <div className="pr-2">
@@ -645,7 +662,11 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
                 <span className="text-gray-500 text-xs truncate pr-2" title={evt.summary}>{evt.summary}</span>
 
                 <div className="flex gap-2">
-                  <button onClick={() => handleEdit(evt)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                  {readOnly ? (
+                    <span className="text-xs text-gray-300">-</span>
+                  ) : (
+                    <button onClick={() => handleEdit(evt)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                  )}
                 </div>
               </>
             )}
@@ -658,22 +679,15 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry 
 
 /* ============================================================
    서브 컴포넌트: StepSection
+   - readOnly: true면 모든 단계가 펼쳐진 채 잠긴 형태로 표시되고
+     "검수 완료" 버튼이 노출되지 않음 (단계 전환 자체가 의미 없음).
+   - readOnly가 아닐 때는 기존처럼 단계별 active/done/pending 흐름을 따름.
 ============================================================ */
 
-function StepSection({ step, index, status, data, onComplete, children }) {
-  const s        = status[step.key]
-  const isLocked = s === 'pending'
+function StepSection({ step, index, status, onComplete, children, readOnly }) {
+  const s        = readOnly ? 'done' : status[step.key]
+  const isLocked = !readOnly && s === 'pending'
   const isDone   = s === 'done'
-  const [submitting, setSubmitting] = useState(false)
-
-  const handleComplete = async () => {
-    setSubmitting(true)
-    try {
-      await onComplete(step.key, data)
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   return (
     <div className={`rounded-2xl border mb-4 overflow-hidden transition-all
@@ -690,21 +704,21 @@ function StepSection({ step, index, status, data, onComplete, children }) {
           <p className={`font-semibold text-sm ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>
             {step.label}
           </p>
-          {isDone   && <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">완료</span>}
-          {isLocked && <span className="text-xs text-gray-400">이전 단계 완료 후 활성화</span>}
+          {readOnly && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">읽기 전용</span>}
+          {!readOnly && isDone   && <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">완료</span>}
+          {!readOnly && isLocked && <span className="text-xs text-gray-400">이전 단계 완료 후 활성화</span>}
         </div>
-        {s === 'active' && (
+        {!readOnly && s === 'active' && (
           <button
-            onClick={handleComplete}
-            disabled={submitting}
-            className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800 disabled:opacity-50"
+            onClick={() => onComplete(step.key)}
+            className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800"
           >
-            {submitting ? '저장 중…' : '검수 완료 →'}
+            검수 완료 →
           </button>
         )}
       </div>
 
-      {s === 'active' && (
+      {(readOnly || s === 'active') && (
         <div className="px-6 pb-6 border-t border-gray-100 pt-5">
           {children}
         </div>
@@ -722,11 +736,21 @@ function Review() {
   const [books, setBooks]               = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [stepStatus, setStepStatus]     = useState(initialStepStatus)
-  const [finalSubmitting, setFinalSubmitting] = useState(false)
 
-  const charActive  = stepStatus.characters !== 'pending'
-  const relActive   = stepStatus.relations  !== 'pending'
-  const eventActive = stepStatus.events     !== 'pending'
+  // 1) DB 저장(approveAnalysisForReview) 관련 상태
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)   // 저장 성공 여부 -> 최종 승인 버튼 활성화 조건
+
+  // 2) 최종 승인(파이프라인 실행, summarizeBook) 관련 상태
+  const [approving, setApproving] = useState(false)
+
+  // 선택된 책이 이미 1차 검수 완료(ANALYZING_COMPLETE) 상태인지 여부
+  // -> 읽기 전용 모드. 저장 단계 없이 바로 최종 승인 가능.
+  const isReadOnlyBook = selectedBook?.status === 'ANALYZING_COMPLETE'
+
+  const charActive  = isReadOnlyBook || stepStatus.characters !== 'pending'
+  const relActive   = isReadOnlyBook || stepStatus.relations  !== 'pending'
+  const eventActive = isReadOnlyBook || stepStatus.events     !== 'pending'
 
   const bookId = selectedBook?.books_id
 
@@ -736,7 +760,11 @@ function Review() {
 
   useEffect(() => {
     getAdminBooks()
-      .then(data => setBooks(data.books || []))
+      .then(data => {
+        const allBooks = data.books || []
+        // ANALYZING_FINISHED / ANALYZING_COMPLETE 상태인 책만 검수 대상으로 노출
+        setBooks(allBooks.filter(b => REVIEWABLE_STATUSES.includes(b.status)))
+      })
       .catch(err => console.error(err))
   }, [])
 
@@ -748,8 +776,8 @@ function Review() {
     }
   }, [books, searchParams])
 
-  const handleComplete = async (stepKey, data) => {
-    await submitStepData(bookId, stepKey, data)
+  // 서버 호출 없이 로컬 상태만 전환. 다음 단계를 활성화한다.
+  const handleComplete = (stepKey) => {
     const idx  = STEPS.findIndex(s => s.key === stepKey)
     const next = STEPS[idx + 1]
     setStepStatus(prev => ({
@@ -762,64 +790,88 @@ function Review() {
   const handleBookSelect = (book) => {
     setSelectedBook(book)
     setStepStatus(initialStepStatus)
+    // 이미 1차 검수 완료된 책은 저장 단계 없이 바로 최종 승인 가능
+    setSaved(book.status === 'ANALYZING_COMPLETE')
   }
 
- // handleFinalApprove 수정
-const handleFinalApprove = async () => {
-  setFinalSubmitting(true)
-  try {
-    const res = await approveAnalysisForReview(bookId, {
-      characters: charData.data,
-      relations:  relData.data,
-      events:     eventData.data,
-    })
+  // ANALYZING_FINISHED 책의 3단계 검수 완료 후: 인물/관계/사건 데이터를 한 번에 DB에 저장
+  const handleSaveReview = async () => {
+    setSaving(true)
+    try {
+      const res = await approveAnalysisForReview(bookId, {
+        characters: charData.data,
+        relations:  relData.data,
+        events:     eventData.data,
+      })
 
-    if (res?.error) {
-      alert(`승인 실패: ${res.message}`)
-      return
+      if (res?.error) {
+        alert(`저장 실패: ${res.message}`)
+        return
+      }
+
+      setSaved(true)
+    } catch (err) {
+      alert(`저장 실패: ${err.message}`)
+    } finally {
+      setSaving(false)
     }
-
-    alert('최종 승인 완료')
-  } catch (err) {
-    alert(`승인 실패: ${err.message}`)
-  } finally {
-    setFinalSubmitting(false)
   }
-}
+
+  // 저장 완료(또는 ANALYZING_COMPLETE) 후에만 호출 가능: 다음 파이프라인 실행 (body 없음)
+  const handleFinalApprove = async () => {
+    setApproving(true)
+    try {
+      const res = await summarizeBook(bookId)
+
+      if (res?.error) {
+        alert(`최종 승인 실패: ${res.message}`)
+        return
+      }
+
+      alert('최종 승인 완료')
+    } catch (err) {
+      alert(`최종 승인 실패: ${err.message}`)
+    } finally {
+      setApproving(false)
+    }
+  }
 
   if (!selectedBook) {
     return (
       <div>
         <h1 className="text-xl font-bold text-gray-900 mb-2">데이터 검수</h1>
         <p className="text-gray-400 text-sm mb-8">책을 선택해서 추출된 데이터를 검수하세요</p>
-        <div className="flex gap-6">
-          {books.map(book => (
-            <div
-              key={book.books_id}
-              onClick={() => handleBookSelect(book)}
-              className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
-              style={{
-                backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
-                backgroundColor: '#1A3C2E',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <p className="text-white font-bold text-sm p-4">{book.title}</p>
-            </div>
-          ))}
-        </div>
+        {books.length === 0 ? (
+          <p className="text-sm text-gray-400">검수 가능한 책이 없습니다.</p>
+        ) : (
+          <div className="flex gap-6 flex-wrap">
+            {books.map(book => (
+              <div key={book.books_id} className="flex flex-col gap-2">
+                <div
+                  onClick={() => handleBookSelect(book)}
+                  className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
+                  style={{
+                    backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
+                    backgroundColor: '#1A3C2E',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                >
+                  <p className="text-white font-bold text-sm p-4">{book.title}</p>
+                </div>
+                <span className={`text-[11px] text-center font-medium px-2 py-0.5 rounded-full
+                  ${book.status === 'ANALYZING_COMPLETE' ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-600'}`}>
+                  {book.status === 'ANALYZING_COMPLETE' ? '1차 검수 완료' : '검수 대기'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
 
-  const allDone = STEPS.every(s => stepStatus[s.key] === 'done')
-
-  const stepDataMap = {
-    characters: charData.data,
-    relations:  relData.data,
-    events:     eventData.data,
-  }
+  const allDone = isReadOnlyBook || STEPS.every(s => stepStatus[s.key] === 'done')
 
   return (
     <div>
@@ -833,9 +885,14 @@ const handleFinalApprove = async () => {
         <h1 className="text-xl font-bold text-gray-900">
           {selectedBook.title} — 데이터 검수
         </h1>
+        {isReadOnlyBook && (
+          <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
+            1차 검수 완료 · 읽기 전용
+          </span>
+        )}
       </div>
 
-      <StepIndicator steps={STEPS} status={stepStatus} />
+      {!isReadOnlyBook && <StepIndicator steps={STEPS} status={stepStatus} />}
 
       {STEPS.map((step, i) => (
         <StepSection
@@ -843,8 +900,8 @@ const handleFinalApprove = async () => {
           step={step}
           index={i}
           status={stepStatus}
-          data={stepDataMap[step.key]}
           onComplete={handleComplete}
+          readOnly={isReadOnlyBook}
         >
           {step.key === 'characters' && (
             <CharacterTable
@@ -853,13 +910,28 @@ const handleFinalApprove = async () => {
               loading={charData.loading}
               error={charData.error}
               onRetry={charData.reload}
+              readOnly={isReadOnlyBook}
             />
           )}
           {step.key === 'relations' && (
-            <RelationTable data={relData.data} setData={relData.setData} loading={relData.loading} error={relData.error} onRetry={relData.reload} />
+            <RelationTable
+              data={relData.data}
+              setData={relData.setData}
+              loading={relData.loading}
+              error={relData.error}
+              onRetry={relData.reload}
+              readOnly={isReadOnlyBook}
+            />
           )}
           {step.key === 'events' && (
-            <EventTable data={eventData.data} setData={eventData.setData} loading={eventData.loading} error={eventData.error} onRetry={eventData.reload} />
+            <EventTable
+              data={eventData.data}
+              setData={eventData.setData}
+              loading={eventData.loading}
+              error={eventData.error}
+              onRetry={eventData.reload}
+              readOnly={isReadOnlyBook}
+            />
           )}
         </StepSection>
       ))}
@@ -867,16 +939,35 @@ const handleFinalApprove = async () => {
       {allDone && (
         <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-2xl flex items-center justify-between">
           <div>
-            <p className="font-semibold text-green-900 text-sm">모든 검수가 완료되었습니다</p>
-            <p className="text-xs text-green-700 mt-0.5">최종 승인 후 서비스에 반영됩니다</p>
+            <p className="font-semibold text-green-900 text-sm">
+              {isReadOnlyBook ? '1차 검수가 완료된 도서입니다' : '모든 검수가 완료되었습니다'}
+            </p>
+            <p className="text-xs text-green-700 mt-0.5">
+              {isReadOnlyBook
+                ? '바로 최종 승인을 진행할 수 있습니다.'
+                : saved
+                  ? '저장이 완료되었습니다. 최종 승인을 진행해 주세요.'
+                  : '먼저 검수 내용을 저장한 뒤 최종 승인을 진행할 수 있습니다.'}
+            </p>
           </div>
-          <button
-            onClick={handleFinalApprove}
-            disabled={finalSubmitting}
-            className="px-6 py-2 bg-green-900 text-white text-sm font-semibold rounded-full hover:bg-green-800 disabled:opacity-50"
-          >
-            {finalSubmitting ? '처리 중…' : '최종 승인'}
-          </button>
+          <div className="flex gap-2">
+            {!isReadOnlyBook && (
+              <button
+                onClick={handleSaveReview}
+                disabled={saving}
+                className="px-6 py-2 bg-white border border-green-900 text-green-900 text-sm font-semibold rounded-full hover:bg-green-50 disabled:opacity-50"
+              >
+                {saving ? '저장 중…' : saved ? '저장됨 ✓' : '저장'}
+              </button>
+            )}
+            <button
+              onClick={handleFinalApprove}
+              disabled={!saved || approving}
+              className="px-6 py-2 bg-green-900 text-white text-sm font-semibold rounded-full hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {approving ? '처리 중…' : '최종 승인'}
+            </button>
+          </div>
         </div>
       )}
     </div>

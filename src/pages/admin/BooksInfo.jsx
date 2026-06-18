@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getAdminBooks, updateBook } from "../../api";
+import { useNavigate } from "react-router-dom"; 
+import { getAdminBooks, updateBook, analyzeBook } from "../../api";
 
 /* ============================================================
    도서 정보 수정 페이지
@@ -11,7 +12,6 @@ import { getAdminBooks, updateBook } from "../../api";
 /* ============================================================
    북 목록 섹션
 ============================================================ */
-
 function BookList({ books, onSelect }) {
   // status가 READY인 도서만 필터링합니다.
   const readyBooks = books.filter(book => book.status === "READY");
@@ -50,7 +50,6 @@ function BookList({ books, onSelect }) {
 /* ============================================================
    인풋 필드
 ============================================================ */
-
 function InputField({ label, name, value, onChange, type = "text", placeholder, error, hint, readOnly }) {
   return (
     <div>
@@ -79,9 +78,9 @@ function InputField({ label, name, value, onChange, type = "text", placeholder, 
 /* ============================================================
    도서 편집 폼
 ============================================================ */
-
 function BookEditForm({ book, onBack }) {
-  // state에서 cover_url을 제외하여 내부 form 조작 대상을 명확히 분리합니다.
+  const navigate = useNavigate();
+  
   const [form, setForm] = useState({
     title: book.title || "",
     author: book.author || "",
@@ -90,7 +89,8 @@ function BookEditForm({ book, onBack }) {
     isbn: book.isbn || "",
   });
   const [errors, setErrors] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false);         // 정보 저장 로딩 상태
+  const [analyzing, setAnalyzing] = useState(false);   // 검수 요청 로딩 상태
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -114,12 +114,13 @@ function BookEditForm({ book, onBack }) {
     return errs;
   };
 
-  const handleSave = async () => {
+  // 1️⃣ [버튼 A] 단순 도서 기본 정보 업데이트 핸들러
+  const handleSaveInfo = async () => {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    
     setSaving(true);
     try {
-      // API 전송 시 cover_url은 원래 도서 정보(book.cover_url)를 그대로 고정해 보냅니다.
       await updateBook(book.books_id, {
         title:          form.title,
         author:         form.author,
@@ -129,10 +130,31 @@ function BookEditForm({ book, onBack }) {
       });
       setDirty(false);
       setSaved(true);
+      alert("도서 정보가 성공적으로 저장되었습니다.");
     } catch (err) {
       alert(`저장 실패: ${err.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 2️⃣ [버튼 B] 책 분석 요청 핸들러 (수정 완료 후 혹은 수정 없이 바로 호출 가능)
+  const handleRequestAnalysis = async () => {
+    if (dirty) {
+      if (!window.confirm("수정 중인 내용이 있습니다. 저장하지 않고 분석 요청을 진행하시겠습니까?")) {
+        return;
+      }
+    }
+
+    setAnalyzing(true);
+    try {
+      await analyzeBook(book.books_id);
+      alert("책 분석 요청이 성공적으로 완료되었습니다.");
+      navigate("/admin"); // 분석 완료 후 최종 어드민 화면으로 이동
+    } catch (err) {
+      alert(`분석 요청 실패: ${err.message}`);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -164,7 +186,7 @@ function BookEditForm({ book, onBack }) {
           ← 책 목록
         </button>
         <h1 className="text-xl font-bold text-gray-900">
-          {book.title} — 도서 정보 수정
+          {book.title} — 도서 정보 수정 및 검수
         </h1>
       </div>
 
@@ -179,11 +201,11 @@ function BookEditForm({ book, onBack }) {
         </div>
 
         <div className="px-6 pb-6 pt-5">
-          {/* 표지 미리보기 + URL (수정 불가 처리) */}
+          {/* 표지 미리보기 + URL */}
           <div className="mb-5">
             <label className="block text-xs font-medium text-gray-500 mb-1.5">표지 이미지</label>
             <div className="flex gap-4 items-start">
-              <div className="w-16 h-24 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-content-center">
+              <div className="w-16 h-24 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-center">
                 {book.cover_url ? (
                   <img
                     src={book.cover_url}
@@ -240,23 +262,35 @@ function BookEditForm({ book, onBack }) {
             <div>
               {saved && (
                 <span className="text-xs text-green-700 bg-green-50 px-3 py-1 rounded-full font-medium">
-                  ✓ 저장되었습니다
+                  ✓ 변경 사항 저장됨
                 </span>
               )}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleCancel}
-                className="px-4 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full hover:bg-gray-200"
+                disabled={saving || analyzing}
+                className="px-4 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full hover:bg-gray-200 disabled:opacity-40"
               >
                 취소
               </button>
+              
+              {/* 버튼 A: 도서 정보 업데이트 버튼 */}
               <button
-                onClick={handleSave}
-                disabled={saving || !dirty}
+                onClick={handleSaveInfo}
+                disabled={saving || analyzing || !dirty} // 변경 사항이 있을 때만 활성화
+                className="px-5 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-full hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? "저장 중…" : "변경 사항 저장"}
+              </button>
+
+              {/* 버튼 B: 최종 검수 요청 버튼 */}
+              <button
+                onClick={handleRequestAnalysis}
+                disabled={saving || analyzing} // 수정 여부와 무관하게 언제든 요청 가능
                 className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {saving ? "저장 중…" : "수정 완료 →"}
+                {analyzing ? "요청 중…" : "책 분석 요청 →"}
               </button>
             </div>
           </div>
@@ -269,7 +303,6 @@ function BookEditForm({ book, onBack }) {
 /* ============================================================
    메인 컴포넌트
 ============================================================ */
-
 function BooksInfo() {
   const [books, setBooks]           = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
