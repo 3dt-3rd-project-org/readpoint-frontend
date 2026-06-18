@@ -30,12 +30,19 @@ const STEPS = [
   { key: 'events',     label: '사건 검수' },
 ]
 
+const navigate = useNavigate();
+
 const initialStepStatus = { characters: 'active', relations: 'pending', events: 'pending' }
 
 // 검수 페이지에 노출할 책의 상태값
 // - ANALYZING_FINISHED: 1차 검수 전. 인물/관계/사건 수정 가능. 저장 후에만 최종 승인 가능.
 // - ANALYZING_COMPLETE: 1차 검수 완료. 읽기 전용. 저장 없이 바로 최종 승인 가능.
 const REVIEWABLE_STATUSES = ['ANALYZING_FINISHED', 'ANALYZING_COMPLETE']
+
+// importance_score가 null/undefined인 경우 0으로 정규화
+function normalizeImportanceScore(value) {
+  return value === null || value === undefined || value === '' ? 0 : value
+}
 
 /* ============================================================
    훅: 단계별 데이터 로딩
@@ -54,8 +61,14 @@ function useStepData(bookId, stepKey, isActive) {
     try {
       let fetched = []
       if (stepKey === 'characters') fetched = await fetchCharacters(bookId)
-      if (stepKey === 'relations')  fetched = await fetchRelations(bookId)
-      if (stepKey === 'events')     fetched = await fetchEvents(bookId)
+      if (stepKey === 'relations')  fetched = (await fetchRelations(bookId)).map(r => ({
+        ...r,
+        importance_score: normalizeImportanceScore(r.importance_score),
+      }))
+      if (stepKey === 'events')     fetched = (await fetchEvents(bookId)).map(e => ({
+        ...e,
+        importance_score: normalizeImportanceScore(e.importance_score),
+      }))
       setData(fetched)
       setOrigin(fetched)
     } catch (e) {
@@ -73,29 +86,38 @@ function useStepData(bookId, stepKey, isActive) {
 }
 
 /* ============================================================
-   서브 컴포넌트: StepIndicator
+   서브 컴포넌트: StepIndicator (탭 역할)
+   - 완료(done)되었거나 활성(active)인 단계는 클릭해서 이동 가능
+   - pending인 단계는 비활성화(아직 도달하지 않음)
 ============================================================ */
 
-function StepIndicator({ steps, status }) {
+function StepIndicator({ steps, status, currentStep, onStepClick, readOnly }) {
   return (
     <div className="flex items-start gap-0 mb-10">
       {steps.map((step, i) => {
         const s = status[step.key]
         const isLast = i === steps.length - 1
+        const isCurrent = step.key === currentStep
+        const isClickable = !readOnly && s !== 'pending'
         return (
           <div key={step.key} className="flex items-start flex-1">
-            <div className="flex flex-col items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0
-                ${s === 'done'   ? 'bg-green-900 text-white'
-                : s === 'active' ? 'bg-green-900 text-white ring-4 ring-green-100'
-                :                  'bg-gray-100 text-gray-400'}`}>
-                {s === 'done' ? '✓' : i + 1}
+            <button
+              type="button"
+              onClick={() => isClickable && onStepClick(step.key)}
+              disabled={!isClickable}
+              className={`flex flex-col items-center flex-1 ${isClickable ? 'cursor-pointer' : 'cursor-default'} group`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 transition-all
+                ${isCurrent    ? 'bg-green-900 text-white ring-4 ring-green-100'
+                : s === 'done' ? `bg-green-900 text-white ${isClickable ? 'group-hover:ring-2 group-hover:ring-green-200' : ''}`
+                :                'bg-gray-100 text-gray-400'}`}>
+                {s === 'done' && !isCurrent ? '✓' : i + 1}
               </div>
               <p className={`text-xs mt-1.5 font-medium whitespace-nowrap
-                ${s === 'active' ? 'text-green-900' : s === 'done' ? 'text-gray-500' : 'text-gray-300'}`}>
+                ${isCurrent ? 'text-green-900' : s === 'done' ? 'text-gray-500 group-hover:text-green-800' : 'text-gray-300'}`}>
                 {step.label}
               </p>
-            </div>
+            </button>
             {!isLast && (
               <div className={`flex-1 h-0.5 mt-4 mx-1
                 ${s === 'done' || status[steps[i + 1].key] !== 'pending' ? 'bg-green-900' : 'bg-gray-200'}`}
@@ -272,6 +294,7 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
 /* ============================================================
    서브 컴포넌트: RelationTable
    - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
+   - importance_score는 null이 들어와도 0으로 표시/저장됨 (normalizeImportanceScore)
 ============================================================ */
 
 function RelationTable({ data: relations, setData: setRelations, loading, error, onRetry, readOnly }) {
@@ -285,24 +308,26 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
     setEditForm({ 
       relation: rel.relation, 
       change_summary: rel.change_summary,
-      importance_score: rel.importance_score,
+      importance_score: normalizeImportanceScore(rel.importance_score),
       is_core_relation: rel.is_core_relation
     })
   }
   
   const handleSave = (id) => {
-    setRelations(prev => prev.map(r => r.relationship_change_id === id ? { ...r, ...editForm } : r))
+    setRelations(prev => prev.map(r => r.relationship_change_id === id
+      ? { ...r, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) }
+      : r))
     setEditingId(null)
   }
   const handleCancel = () => setEditingId(null)
 
   const enterBulk = () => {
-    setBulkDraft(relations.map(r => ({ ...r })))
+    setBulkDraft(relations.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })))
     setBulkMode(true)
     setEditingId(null)
   }
   const saveBulk = () => {
-    setRelations(bulkDraft)
+    setRelations(bulkDraft.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })))
     setBulkMode(false)
   }
   const cancelBulk = () => setBulkMode(false)
@@ -389,8 +414,8 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
                     step="0.01"
                     min="0"
                     max="1"
-                    value={rel.importance_score || 0} 
-                    onChange={e => updateDraft(rel.relationship_change_id, 'importance_score', e.target.value)}
+                    value={normalizeImportanceScore(rel.importance_score)} 
+                    onChange={e => updateDraft(rel.relationship_change_id, 'importance_score', e.target.value === '' ? 0 : e.target.value)}
                     className="border border-gray-200 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
                   />
                 </div>
@@ -428,8 +453,8 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
                     step="0.01"
                     min="0"
                     max="1"
-                    value={editForm.importance_score || 0} 
-                    onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value }))}
+                    value={normalizeImportanceScore(editForm.importance_score)} 
+                    onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : e.target.value }))}
                     className="border border-gray-300 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
                   />
                 </div>
@@ -459,7 +484,7 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
                   </span>
                 </div>
                 <div className="col-span-1 text-center font-mono text-xs text-gray-600">
-                  {Number(rel.importance_score).toFixed(2)}
+                  {Number(normalizeImportanceScore(rel.importance_score)).toFixed(2)}
                 </div>
                 <div className="col-span-1 text-center">
                   {rel.is_core_relation ? (
@@ -489,6 +514,7 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
    - 유형(event_type) 컬럼 제거
    - 챕터 ID 읽기 전용 (수정 불가)
    - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
+   - importance_score는 null이 들어와도 0으로 표시/저장됨
 ============================================================ */
 
 function EventTable({ data: events, setData: setEvents, loading, error, onRetry, readOnly }) {
@@ -502,23 +528,25 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
     setEditForm({ 
       short_title: evt.short_title, 
       summary: evt.summary,
-      importance_score: evt.importance_score,
+      importance_score: normalizeImportanceScore(evt.importance_score),
       is_sensitive: evt.is_sensitive
     })
   }
   const handleSave = (id) => {
-    setEvents(prev => prev.map(e => e.event_id === id ? { ...e, ...editForm } : e))
+    setEvents(prev => prev.map(e => e.event_id === id
+      ? { ...e, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) }
+      : e))
     setEditingId(null)
   }
   const handleCancel = () => setEditingId(null)
 
   const enterBulk = () => {
-    setBulkDraft(events.map(e => ({ ...e })))
+    setBulkDraft(events.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })))
     setBulkMode(true)
     setEditingId(null)
   }
   const saveBulk = () => {
-    setEvents(bulkDraft)
+    setEvents(bulkDraft.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })))
     setBulkMode(false)
   }
   const cancelBulk = () => setBulkMode(false)
@@ -586,8 +614,8 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
                 <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
 
                 {/* 중요도 */}
-                <input type="number" min="0" max="10" value={evt.importance_score || 0}
-                  onChange={e => updateDraft(evt.event_id, 'importance_score', parseInt(e.target.value) || 0)}
+                <input type="number" min="0" max="10" value={normalizeImportanceScore(evt.importance_score)}
+                  onChange={e => updateDraft(evt.event_id, 'importance_score', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
                   className="border border-gray-200 rounded px-2 py-1 text-xs w-16" />
 
                 {/* 민감도 */}
@@ -616,8 +644,8 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
                 <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
 
                 {/* 중요도 */}
-                <input type="number" min="0" max="10" value={editForm.importance_score || 0}
-                  onChange={e => setEditForm(p => ({ ...p, importance_score: parseInt(e.target.value) || 0 }))}
+                <input type="number" min="0" max="10" value={normalizeImportanceScore(editForm.importance_score)}
+                  onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : parseInt(e.target.value) || 0 }))}
                   className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
 
                 {/* 민감도 */}
@@ -647,7 +675,7 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
 
                 {/* 중요도 뱃지 */}
                 <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-max">
-                  ★ {evt.importance_score || 0}
+                  ★ {normalizeImportanceScore(evt.importance_score)}
                 </span>
 
                 {/* 민감도 */}
@@ -678,51 +706,43 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
 }
 
 /* ============================================================
-   서브 컴포넌트: StepSection
-   - readOnly: true면 모든 단계가 펼쳐진 채 잠긴 형태로 표시되고
-     "검수 완료" 버튼이 노출되지 않음 (단계 전환 자체가 의미 없음).
-   - readOnly가 아닐 때는 기존처럼 단계별 active/done/pending 흐름을 따름.
+   서브 컴포넌트: StepPanel
+   - 탭 방식: 현재 선택된 단계 하나만 화면에 렌더링됨
+   - readOnly 모드일 때는 카드 하나에 안내 문구만 표시 (탭 전환 의미 없음 → 호출하는 쪽에서 분기)
 ============================================================ */
 
-function StepSection({ step, index, status, onComplete, children, readOnly }) {
-  const s        = readOnly ? 'done' : status[step.key]
-  const isLocked = !readOnly && s === 'pending'
-  const isDone   = s === 'done'
-
+function StepPanel({ step, index, total, onComplete, onPrev, children, isFirst }) {
   return (
-    <div className={`rounded-2xl border mb-4 overflow-hidden transition-all
-      ${isLocked ? 'border-gray-100 bg-gray-50 opacity-50 pointer-events-none'
-      : isDone   ? 'border-green-100 bg-green-50/30'
-      :            'border-gray-200 bg-white'}`}
-    >
-      <div className="flex items-center justify-between px-6 py-4">
+    <div className="rounded-2xl border border-green-100 bg-white overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 bg-green-50/40 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
-            ${isDone || !isLocked ? 'bg-green-900 text-white' : 'bg-gray-200 text-gray-400'}`}>
-            {isDone ? '✓' : index + 1}
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold bg-green-900 text-white">
+            {index + 1}
           </div>
-          <p className={`font-semibold text-sm ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>
-            {step.label}
-          </p>
-          {readOnly && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">읽기 전용</span>}
-          {!readOnly && isDone   && <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">완료</span>}
-          {!readOnly && isLocked && <span className="text-xs text-gray-400">이전 단계 완료 후 활성화</span>}
+          <p className="font-semibold text-sm text-gray-900">{step.label}</p>
+          <span className="text-xs text-gray-400">{index + 1} / {total} 단계</span>
         </div>
-        {!readOnly && s === 'active' && (
+        <div className="flex gap-2">
+          {!isFirst && (
+            <button
+              onClick={onPrev}
+              className="px-4 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-full hover:bg-gray-50"
+            >
+              ← 이전 단계
+            </button>
+          )}
           <button
-            onClick={() => onComplete(step.key)}
+            onClick={onComplete}
             className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800"
           >
             검수 완료 →
           </button>
-        )}
+        </div>
       </div>
 
-      {(readOnly || s === 'active') && (
-        <div className="px-6 pb-6 border-t border-gray-100 pt-5">
-          {children}
-        </div>
-      )}
+      <div className="px-6 pb-6 pt-5">
+        {children}
+      </div>
     </div>
   )
 }
@@ -737,6 +757,9 @@ function Review() {
   const [books, setBooks]               = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [stepStatus, setStepStatus]     = useState(initialStepStatus)
+  // 탭 방식 핵심: 현재 화면에 보여줄 단계를 별도로 관리.
+  // "검수 완료"를 누르면 currentStep이 다음 단계로 바뀌어 화면이 즉시 전환된다.
+  const [currentStep, setCurrentStep]   = useState(STEPS[0].key)
 
   // 1) DB 저장(approveAnalysisForReview) 관련 상태
   const [saving, setSaving]   = useState(false)
@@ -777,7 +800,7 @@ function Review() {
     }
   }, [books, searchParams])
 
-  // 서버 호출 없이 로컬 상태만 전환. 다음 단계를 활성화한다.
+  // 서버 호출 없이 로컬 상태만 전환. 다음 단계를 활성화하고 화면도 그 단계로 이동한다.
   const handleComplete = (stepKey) => {
     const idx  = STEPS.findIndex(s => s.key === stepKey)
     const next = STEPS[idx + 1]
@@ -786,11 +809,42 @@ function Review() {
       [stepKey]: 'done',
       ...(next ? { [next.key]: 'active' } : {}),
     }))
+    // 단계가 다시 진행되었으니 저장 상태는 초기화 (다시 저장해야 최종 승인 가능)
+    setSaved(false)
+    // 화면 전환: 다음 단계가 있으면 그 탭으로, 없으면 마지막 단계에 머무름(allDone 영역이 아래에 노출됨)
+    if (next) setCurrentStep(next.key)
+  }
+
+  // 화면을 이전 단계 탭으로 이동시킨다. (저장 중 오류가 발생했을 때 데이터를 다시 수정할 수 있도록)
+  // 이동만 할 뿐 done 상태를 active로 되돌리지는 않음 — 데이터는 그대로 보존된 채 다시 보고 고칠 수 있음.
+  const handleGoToPrevStep = () => {
+    const idx = STEPS.findIndex(s => s.key === currentStep)
+    if (idx <= 0) return
+    const prevKey = STEPS[idx - 1].key
+    // 이전 단계가 done이었다면 다시 active로 풀어서 수정 가능하게 하고,
+    // 그 뒤(현재 단계 포함) 단계들은 pending으로 되돌린다.
+    setStepStatus(prev => {
+      const next = { ...prev }
+      STEPS.forEach((step, i) => {
+        if (i < idx - 1) return
+        else if (i === idx - 1) next[step.key] = 'active'
+        else next[step.key] = 'pending'
+      })
+      return next
+    })
+    setSaved(false)
+    setCurrentStep(prevKey)
+  }
+
+  // StepIndicator 탭 클릭으로 이미 도달한(done/active) 단계로 바로 이동
+  const handleStepClick = (stepKey) => {
+    setCurrentStep(stepKey)
   }
 
   const handleBookSelect = (book) => {
     setSelectedBook(book)
     setStepStatus(initialStepStatus)
+    setCurrentStep(STEPS[0].key)
     // 이미 1차 검수 완료된 책은 저장 단계 없이 바로 최종 승인 가능
     setSaved(book.status === 'ANALYZING_COMPLETE')
   }
@@ -801,8 +855,8 @@ function Review() {
     try {
       const res = await approveAnalysisForReview(bookId, {
         characters: charData.data,
-        relations:  relData.data,
-        events:     eventData.data,
+        relations:  relData.data.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })),
+        events:     eventData.data.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })),
       })
 
       if (res?.error) {
@@ -833,6 +887,7 @@ function Review() {
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       type: 'running',
       text: '2차 요약 파이프라인이 시작되었습니다. 약 30분 소요 예정'
+
     }
     const existing = JSON.parse(localStorage.getItem('pipeline_logs') || '[]')
     localStorage.setItem('pipeline_logs', JSON.stringify([newLog, ...existing].slice(0, 50)))
@@ -881,6 +936,13 @@ function Review() {
   }
 
   const allDone = isReadOnlyBook || STEPS.every(s => stepStatus[s.key] === 'done')
+  const currentIndex = STEPS.findIndex(s => s.key === currentStep)
+
+  const stepDataMap = {
+    characters: charData,
+    relations:  relData,
+    events:     eventData,
+  }
 
   return (
     <div>
@@ -901,49 +963,102 @@ function Review() {
         )}
       </div>
 
-      {!isReadOnlyBook && <StepIndicator steps={STEPS} status={stepStatus} />}
-
-      {STEPS.map((step, i) => (
-        <StepSection
-          key={step.key}
-          step={step}
-          index={i}
+      {!isReadOnlyBook && (
+        <StepIndicator
+          steps={STEPS}
           status={stepStatus}
-          onComplete={handleComplete}
+          currentStep={currentStep}
+          onStepClick={handleStepClick}
           readOnly={isReadOnlyBook}
+        />
+      )}
+
+      {isReadOnlyBook ? (
+        // 읽기 전용 모드: 탭 전환 없이 3개 단계를 모두 펼쳐서 한 번에 보여줌
+        <div className="space-y-4">
+          {STEPS.map((step) => (
+            <div key={step.key} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                <p className="font-semibold text-sm text-gray-900">{step.label}</p>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">읽기 전용</span>
+              </div>
+              <div className="px-6 pb-6 pt-5">
+                {step.key === 'characters' && (
+                  <CharacterTable
+                    characters={charData.data}
+                    setCharacters={charData.setData}
+                    loading={charData.loading}
+                    error={charData.error}
+                    onRetry={charData.reload}
+                    readOnly
+                  />
+                )}
+                {step.key === 'relations' && (
+                  <RelationTable
+                    data={relData.data}
+                    setData={relData.setData}
+                    loading={relData.loading}
+                    error={relData.error}
+                    onRetry={relData.reload}
+                    readOnly
+                  />
+                )}
+                {step.key === 'events' && (
+                  <EventTable
+                    data={eventData.data}
+                    setData={eventData.setData}
+                    loading={eventData.loading}
+                    error={eventData.error}
+                    onRetry={eventData.reload}
+                    readOnly
+                  />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        // 일반 모드: 탭 방식. 현재 단계 하나만 렌더링.
+        <StepPanel
+          step={STEPS[currentIndex]}
+          index={currentIndex}
+          total={STEPS.length}
+          isFirst={currentIndex === 0}
+          onPrev={handleGoToPrevStep}
+          onComplete={() => handleComplete(currentStep)}
         >
-          {step.key === 'characters' && (
+          {currentStep === 'characters' && (
             <CharacterTable
               characters={charData.data}
               setCharacters={charData.setData}
               loading={charData.loading}
               error={charData.error}
               onRetry={charData.reload}
-              readOnly={isReadOnlyBook}
+              readOnly={false}
             />
           )}
-          {step.key === 'relations' && (
+          {currentStep === 'relations' && (
             <RelationTable
               data={relData.data}
               setData={relData.setData}
               loading={relData.loading}
               error={relData.error}
               onRetry={relData.reload}
-              readOnly={isReadOnlyBook}
+              readOnly={false}
             />
           )}
-          {step.key === 'events' && (
+          {currentStep === 'events' && (
             <EventTable
               data={eventData.data}
               setData={eventData.setData}
               loading={eventData.loading}
               error={eventData.error}
               onRetry={eventData.reload}
-              readOnly={isReadOnlyBook}
+              readOnly={false}
             />
           )}
-        </StepSection>
-      ))}
+        </StepPanel>
+      )}
 
       {allDone && (
         <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-2xl flex items-center justify-between">
