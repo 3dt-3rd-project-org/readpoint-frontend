@@ -20,10 +20,6 @@ async function fetchEvents(bookId) {
   return response?.events || []; 
 }
 
-/* ============================================================
-   상수
-============================================================ */
-
 const STEPS = [
   { key: 'characters', label: '인물 검수' },
   { key: 'relations',  label: '관계 검수' },
@@ -32,19 +28,11 @@ const STEPS = [
 
 const initialStepStatus = { characters: 'active', relations: 'pending', events: 'pending' }
 
-// 검수 페이지에 노출할 책의 상태값
-// - ANALYZING_FINISHED: 1차 검수 전. 인물/관계/사건 수정 가능. 저장 후에만 최종 승인 가능.
-// - ANALYZING_COMPLETE: 1차 검수 완료. 읽기 전용. 저장 없이 바로 최종 승인 가능.
 const REVIEWABLE_STATUSES = ['ANALYZING_FINISHED', 'ANALYZING_COMPLETE']
 
-// importance_score가 null/undefined인 경우 0으로 정규화
 function normalizeImportanceScore(value) {
   return value === null || value === undefined || value === '' ? 0 : value
 }
-
-/* ============================================================
-   훅: 단계별 데이터 로딩
-============================================================ */
 
 function useStepData(bookId, stepKey, isActive) {
   const [data, setData]       = useState([])
@@ -82,12 +70,6 @@ function useStepData(bookId, stepKey, isActive) {
 
   return { data, setData, loading, error, reload: load, isDirty }
 }
-
-/* ============================================================
-   서브 컴포넌트: StepIndicator (탭 역할)
-   - 완료(done)되었거나 활성(active)인 단계는 클릭해서 이동 가능
-   - pending인 단계는 비활성화(아직 도달하지 않음)
-============================================================ */
 
 function StepIndicator({ steps, status, currentStep, onStepClick, readOnly }) {
   return (
@@ -128,10 +110,6 @@ function StepIndicator({ steps, status, currentStep, onStepClick, readOnly }) {
   )
 }
 
-/* ============================================================
-   서브 컴포넌트: LoadingRows / ErrorRow
-============================================================ */
-
 function LoadingRows() {
   return (
     <div className="space-y-3 py-2">
@@ -154,10 +132,8 @@ function ErrorRow({ message, onRetry }) {
 }
 
 /* ============================================================
-   서브 컴포넌트: CharacterTable
-   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
+   CharacterTable
 ============================================================ */
-
 function CharacterTable({ characters, setCharacters, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm]   = useState({})
@@ -172,12 +148,10 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
       description: char.description 
     })
   }
-  
   const handleSave = (id) => {
     setCharacters(prev => prev.map(c => c.character_id === id ? { ...c, ...editForm } : c))
     setEditingId(null)
   }
-  
   const handleCancel = () => setEditingId(null)
 
   const enterBulk = () => {
@@ -185,14 +159,8 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
     setBulkMode(true)
     setEditingId(null)
   }
-  
-  const saveBulk = () => {
-    setCharacters(bulkDraft)
-    setBulkMode(false)
-  }
-  
+  const saveBulk = () => { setCharacters(bulkDraft); setBulkMode(false) }
   const cancelBulk = () => setBulkMode(false)
-  
   const updateDraft = (id, field, value) =>
     setBulkDraft(prev => prev.map(c => c.character_id === id ? { ...c, [field]: value } : c))
 
@@ -209,20 +177,11 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
           <div className="flex gap-2">
             {bulkMode ? (
               <>
-                <button onClick={saveBulk}
-                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                  전체 저장
-                </button>
-                <button onClick={cancelBulk}
-                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                  취소
-                </button>
+                <button onClick={saveBulk} className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">전체 저장</button>
+                <button onClick={cancelBulk} className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">취소</button>
               </>
             ) : (
-              <button onClick={enterBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-                전체 수정
-              </button>
+              <button onClick={enterBulk} className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">전체 수정</button>
             )}
           </div>
         )}
@@ -230,12 +189,8 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="grid grid-cols-[1fr_1fr_2.5fr_0.5fr] px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
-          <span>인물명</span>
-          <span>역할</span>
-          <span>설명</span>
-          <span className="text-right">액션</span>
+          <span>인물명</span><span>역할</span><span>설명</span><span className="text-right">액션</span>
         </div>
-
         {Array.isArray(rows) && rows.map((char, i) => (
           <div key={char.character_id}
             className={`grid grid-cols-[1fr_1fr_2.5fr_0.5fr] px-5 py-4 items-center text-sm
@@ -244,22 +199,16 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
           >
             {!readOnly && bulkMode ? (
               <>
-                <input value={char.character_name || ''} onChange={e => updateDraft(char.character_id, 'character_name', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
-                <input value={char.role || ''} onChange={e => updateDraft(char.character_id, 'role', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
-                <input value={char.description || ''} onChange={e => updateDraft(char.character_id, 'description', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-[95%]" />
+                <input value={char.character_name || ''} onChange={e => updateDraft(char.character_id, 'character_name', e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={char.role || ''} onChange={e => updateDraft(char.character_id, 'role', e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={char.description || ''} onChange={e => updateDraft(char.character_id, 'description', e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-xs w-[95%]" />
                 <span className="text-right text-xs text-gray-300">-</span>
               </>
             ) : !readOnly && editingId === char.character_id ? (
               <>
-                <input value={editForm.character_name || ''} onChange={e => setEditForm(p => ({ ...p, character_name: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
-                <input value={editForm.role || ''} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
-                <input value={editForm.description || ''} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-[95%]" />
+                <input value={editForm.character_name || ''} onChange={e => setEditForm(p => ({ ...p, character_name: e.target.value }))} className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={editForm.role || ''} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))} className="border border-gray-300 rounded px-2 py-1 text-xs w-[90%]" />
+                <input value={editForm.description || ''} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="border border-gray-300 rounded px-2 py-1 text-xs w-[95%]" />
                 <div className="flex gap-1 justify-end">
                   <button onClick={() => handleSave(char.character_id)} className="text-green-700 font-medium hover:underline text-xs mr-2">저장</button>
                   <button onClick={handleCancel} className="text-gray-400 hover:underline text-xs">취소</button>
@@ -271,13 +220,8 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
                 <span className="text-gray-500">{char.role}</span>
                 <span className="text-gray-500 text-xs line-clamp-1 pr-4" title={char.description}>{char.description}</span>
                 <div className="text-right">
-                  {readOnly ? (
-                    <span className="text-xs text-gray-300">-</span>
-                  ) : (
-                    <button onClick={() => handleEdit(char)}
-                      className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200 transition-colors">
-                      수정
-                    </button>
+                  {readOnly ? <span className="text-xs text-gray-300">-</span> : (
+                    <button onClick={() => handleEdit(char)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200 transition-colors">수정</button>
                   )}
                 </div>
               </>
@@ -290,11 +234,10 @@ function CharacterTable({ characters, setCharacters, loading, error, onRetry, re
 }
 
 /* ============================================================
-   서브 컴포넌트: RelationTable
-   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
-   - importance_score는 null이 들어와도 0으로 표시/저장됨 (normalizeImportanceScore)
+   RelationTable
+   - change_summary: textarea로 변경 (긴 텍스트 대응)
+   - chapter_order, chapter_title 컬럼 추가 (읽기 전용)
 ============================================================ */
-
 function RelationTable({ data: relations, setData: setRelations, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -310,33 +253,29 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
       is_core_relation: rel.is_core_relation
     })
   }
-  
   const handleSave = (id) => {
     setRelations(prev => prev.map(r => r.relationship_change_id === id
-      ? { ...r, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) }
-      : r))
+      ? { ...r, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) } : r))
     setEditingId(null)
   }
   const handleCancel = () => setEditingId(null)
 
   const enterBulk = () => {
     setBulkDraft(relations.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })))
-    setBulkMode(true)
-    setEditingId(null)
+    setBulkMode(true); setEditingId(null)
   }
   const saveBulk = () => {
     setRelations(bulkDraft.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })))
     setBulkMode(false)
   }
   const cancelBulk = () => setBulkMode(false)
-  
   const updateDraft = (id, field, value) =>
     setBulkDraft(prev => prev.map(r => r.relationship_change_id === id ? { ...r, [field]: value } : r))
 
   const rows = bulkMode ? bulkDraft : relations
 
-  if (loading) return <div>로딩 중...</div>
-  if (error) return <div>에러 발생: {error} <button onClick={onRetry}>재시도</button></div>
+  if (loading) return <div className="text-gray-400 p-4 text-center">데이터를 불러오는 중입니다...</div>
+  if (error) return <ErrorRow message={error} onRetry={onRetry} />
 
   return (
     <div className="w-full">
@@ -346,175 +285,151 @@ function RelationTable({ data: relations, setData: setRelations, loading, error,
           <div className="flex gap-2">
             {bulkMode ? (
               <>
-                <button onClick={saveBulk}
-                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                  전체 저장
-                </button>
-                <button onClick={cancelBulk}
-                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                  취소
-                </button>
+                <button onClick={saveBulk} className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">전체 저장</button>
+                <button onClick={cancelBulk} className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">취소</button>
               </>
             ) : (
-              <button onClick={enterBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-                전체 수정
-              </button>
+              <button onClick={enterBulk} className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">전체 수정</button>
             )}
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-[800px]">
-        <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400 gap-4">
-          <span className="col-span-2">인물 관계 (A → B)</span>
-          <span className="col-span-2">관계명</span>
-          <span className="col-span-4">변경 요약</span>
-          <span className="col-span-1 text-center">중요도</span>
-          <span className="col-span-1 text-center">핵심여부</span>
-          <span className="col-span-2 text-right">액션</span>
-        </div>
-
-        {rows.map((rel, i) => (
-          <div key={rel.relationship_change_id}
-            className={`grid grid-cols-12 px-5 py-4 items-center text-sm gap-4
-              ${rel.is_core_relation ? 'bg-blue-50/40 font-medium' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
-              ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
-          >
-            <div className="col-span-2 flex flex-col truncate">
-              <span className="text-gray-900 font-medium">
-                {rel.source_character_name} → {rel.target_character_name}
-              </span>
-              <span className="text-gray-400 text-xs">
-                (ID: {rel.source_character_id} → {rel.target_character_id})
-              </span>
-            </div>
-
-            {!readOnly && bulkMode ? (
-              <>
-                <div className="col-span-2">
-                  <input 
-                    value={rel.relation || ''} 
-                    onChange={e => updateDraft(rel.relationship_change_id, 'relation', e.target.value)}
-                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-4">
-                  <input 
-                    value={rel.change_summary || ''} 
-                    onChange={e => updateDraft(rel.relationship_change_id, 'change_summary', e.target.value)}
-                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-1 text-center">
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    value={normalizeImportanceScore(rel.importance_score)} 
-                    onChange={e => updateDraft(rel.relationship_change_id, 'importance_score', e.target.value === '' ? 0 : e.target.value)}
-                    className="border border-gray-200 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-1 text-center">
-                  <input 
-                    type="checkbox" 
-                    checked={!!rel.is_core_relation} 
-                    onChange={e => updateDraft(rel.relationship_change_id, 'is_core_relation', e.target.checked)}
-                    className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900"
-                  />
-                </div>
-                <div className="col-span-2 text-right text-gray-400 text-xs">
-                  수정 중
-                </div>
-              </>
-            ) : !readOnly && editingId === rel.relationship_change_id ? (
-              <>
-                <div className="col-span-2">
-                  <input 
-                    value={editForm.relation || ''} 
-                    onChange={e => setEditForm(p => ({ ...p, relation: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-4">
-                  <input 
-                    value={editForm.change_summary || ''} 
-                    onChange={e => setEditForm(p => ({ ...p, change_summary: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-1 text-center">
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    value={normalizeImportanceScore(editForm.importance_score)} 
-                    onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : e.target.value }))}
-                    className="border border-gray-300 rounded px-1 py-1 text-xs w-16 text-center focus:outline-green-900" 
-                  />
-                </div>
-                <div className="col-span-1 text-center">
-                  <input 
-                    type="checkbox" 
-                    checked={!!editForm.is_core_relation} 
-                    onChange={e => setEditForm(p => ({ ...p, is_core_relation: e.target.checked }))}
-                    className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900"
-                  />
-                </div>
-                <div className="col-span-2 flex gap-1 justify-end">
-                  <button onClick={() => handleSave(rel.relationship_change_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full hover:bg-green-800">저장</button>
-                  <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">취소</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="col-span-2">
-                  <span className="text-green-800 font-semibold text-xs bg-green-50 px-2 py-1 rounded block w-max truncate max-w-full" title={rel.relation}>
-                    {rel.relation}
-                  </span>
-                </div>
-                <div className="col-span-4">
-                  <span className="text-gray-500 text-xs block truncate pr-2" title={rel.change_summary}>
-                    {rel.change_summary}
-                  </span>
-                </div>
-                <div className="col-span-1 text-center font-mono text-xs text-gray-600">
-                  {Number(normalizeImportanceScore(rel.importance_score)).toFixed(2)}
-                </div>
-                <div className="col-span-1 text-center">
-                  {rel.is_core_relation ? (
-                    <span className="text-blue-600 bg-blue-50 text-[10px] font-bold px-1.5 py-0.5 rounded-full">CORE</span>
-                  ) : (
-                    <span className="text-gray-300">-</span>
-                  )}
-                </div>
-                <div className="col-span-2 text-right">
-                  {readOnly ? (
-                    <span className="text-xs text-gray-300">-</span>
-                  ) : (
-                    <button onClick={() => handleEdit(rel)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
-                  )}
-                </div>
-              </>
-            )}
+      <div className="overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-[960px]">
+          {/* cols: 인물관계(2) 챕터(2) 관계명(2) 변경요약(3) 중요도(1) 핵심(1) 액션(1) = 12 */}
+          <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400 gap-2">
+            <span className="col-span-2">인물 관계 (A → B)</span>
+            <span className="col-span-2">챕터</span>
+            <span className="col-span-2">관계명</span>
+            <span className="col-span-3">변경 요약</span>
+            <span className="col-span-1 text-center">중요도</span>
+            <span className="col-span-1 text-center">핵심</span>
+            <span className="col-span-1 text-right">액션</span>
           </div>
-        ))}
+
+          {rows.map((rel, i) => (
+            <div key={rel.relationship_change_id}
+              className={`grid grid-cols-12 px-5 py-4 items-start text-sm gap-2
+                ${rel.is_core_relation ? 'bg-blue-50/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+            >
+              {/* 인물 관계 — 항상 읽기 전용 */}
+              <div className="col-span-2 flex flex-col">
+                <span className="text-gray-900 font-medium text-xs">
+                  {rel.source_character_name} → {rel.target_character_name}
+                </span>
+                <span className="text-gray-400 text-[10px] mt-0.5">
+                  (ID: {rel.source_character_id} → {rel.target_character_id})
+                </span>
+              </div>
+
+              {/* 챕터 — 항상 읽기 전용 */}
+              <div className="col-span-2 flex flex-col text-xs">
+                <span className="font-medium text-gray-600">
+                  {rel.chapter_order != null ? `${rel.chapter_order}화` : '-'}
+                </span>
+                <span className="text-gray-400 truncate" title={rel.chapter_title}>
+                  {rel.chapter_title || '-'}
+                </span>
+              </div>
+
+              {/* ── 전체 수정 모드 ── */}
+              {!readOnly && bulkMode ? (
+                <>
+                  <div className="col-span-2">
+                    <input value={rel.relation || ''} onChange={e => updateDraft(rel.relationship_change_id, 'relation', e.target.value)}
+                      className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" />
+                  </div>
+                  <div className="col-span-3">
+                    <textarea value={rel.change_summary || ''} onChange={e => updateDraft(rel.relationship_change_id, 'change_summary', e.target.value)}
+                      rows={3} className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900 resize-none leading-relaxed" />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <input type="number" step="0.01" min="0" max="1"
+                      value={normalizeImportanceScore(rel.importance_score)}
+                      onChange={e => updateDraft(rel.relationship_change_id, 'importance_score', e.target.value === '' ? 0 : e.target.value)}
+                      className="border border-gray-200 rounded px-1 py-1 text-xs w-14 text-center focus:outline-green-900" />
+                  </div>
+                  <div className="col-span-1 flex justify-center pt-1">
+                    <input type="checkbox" checked={!!rel.is_core_relation}
+                      onChange={e => updateDraft(rel.relationship_change_id, 'is_core_relation', e.target.checked)}
+                      className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900" />
+                  </div>
+                  <div className="col-span-1 text-right text-gray-400 text-xs pt-1">수정 중</div>
+                </>
+
+              /* ── 단건 수정 모드 ── */
+              ) : !readOnly && editingId === rel.relationship_change_id ? (
+                <>
+                  <div className="col-span-2">
+                    <input value={editForm.relation || ''} onChange={e => setEditForm(p => ({ ...p, relation: e.target.value }))}
+                      className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" />
+                  </div>
+                  <div className="col-span-3">
+                    <textarea value={editForm.change_summary || ''} onChange={e => setEditForm(p => ({ ...p, change_summary: e.target.value }))}
+                      rows={3} className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900 resize-none leading-relaxed" />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <input type="number" step="0.01" min="0" max="1"
+                      value={normalizeImportanceScore(editForm.importance_score)}
+                      onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : e.target.value }))}
+                      className="border border-gray-300 rounded px-1 py-1 text-xs w-14 text-center focus:outline-green-900" />
+                  </div>
+                  <div className="col-span-1 flex justify-center pt-1">
+                    <input type="checkbox" checked={!!editForm.is_core_relation}
+                      onChange={e => setEditForm(p => ({ ...p, is_core_relation: e.target.checked }))}
+                      className="w-4 h-4 text-green-900 border-gray-300 rounded focus:ring-green-900" />
+                  </div>
+                  <div className="col-span-1 flex gap-1 justify-end flex-wrap">
+                    <button onClick={() => handleSave(rel.relationship_change_id)} className="px-2 py-1 bg-green-900 text-white text-xs rounded-full hover:bg-green-800">저장</button>
+                    <button onClick={handleCancel} className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">취소</button>
+                  </div>
+                </>
+
+              /* ── 읽기 모드 ── */
+              ) : (
+                <>
+                  <div className="col-span-2">
+                    <span className="text-green-800 font-semibold text-xs bg-green-50 px-2 py-1 rounded block w-max max-w-full truncate" title={rel.relation}>
+                      {rel.relation}
+                    </span>
+                  </div>
+                  <div className="col-span-3">
+                    <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-wrap break-words pr-2">
+                      {rel.change_summary}
+                    </p>
+                  </div>
+                  <div className="col-span-1 text-center font-mono text-xs text-gray-600 pt-0.5">
+                    {Number(normalizeImportanceScore(rel.importance_score)).toFixed(2)}
+                  </div>
+                  <div className="col-span-1 text-center pt-0.5">
+                    {rel.is_core_relation
+                      ? <span className="text-blue-600 bg-blue-50 text-[10px] font-bold px-1.5 py-0.5 rounded-full">CORE</span>
+                      : <span className="text-gray-300 text-xs">-</span>}
+                  </div>
+                  <div className="col-span-1 text-right pt-0.5">
+                    {readOnly ? <span className="text-xs text-gray-300">-</span> : (
+                      <button onClick={() => handleEdit(rel)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
 /* ============================================================
-   서브 컴포넌트: EventTable
-   - 유형(event_type) 컬럼 제거
-   - 챕터 ID 읽기 전용 (수정 불가)
-   - readOnly: true면 수정/전체수정 버튼 및 입력 UI 숨김
-   - importance_score는 null이 들어와도 0으로 표시/저장됨
+   EventTable
+   - chapter_order, chapter_title 추가 (읽기 전용)
+   - summary: textarea로 변경
+   - is_sensitive: 제거
+   - importance_score, is_core_event: 수정 가능
 ============================================================ */
-
 function EventTable({ data: events, setData: setEvents, loading, error, onRetry, readOnly }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -527,28 +442,25 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
       short_title: evt.short_title, 
       summary: evt.summary,
       importance_score: normalizeImportanceScore(evt.importance_score),
-      is_sensitive: evt.is_sensitive
+      is_core_event: evt.is_core_event
     })
   }
   const handleSave = (id) => {
     setEvents(prev => prev.map(e => e.event_id === id
-      ? { ...e, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) }
-      : e))
+      ? { ...e, ...editForm, importance_score: normalizeImportanceScore(editForm.importance_score) } : e))
     setEditingId(null)
   }
   const handleCancel = () => setEditingId(null)
 
   const enterBulk = () => {
     setBulkDraft(events.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })))
-    setBulkMode(true)
-    setEditingId(null)
+    setBulkMode(true); setEditingId(null)
   }
   const saveBulk = () => {
     setEvents(bulkDraft.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })))
     setBulkMode(false)
   }
   const cancelBulk = () => setBulkMode(false)
-  
   const updateDraft = (id, field, value) =>
     setBulkDraft(prev => prev.map(e => e.event_id === id ? { ...e, [field]: value } : e))
 
@@ -565,150 +477,161 @@ function EventTable({ data: events, setData: setEvents, loading, error, onRetry,
           <div className="flex gap-2">
             {bulkMode ? (
               <>
-                <button onClick={saveBulk}
-                  className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">
-                  전체 저장
-                </button>
-                <button onClick={cancelBulk}
-                  className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">
-                  취소
-                </button>
+                <button onClick={saveBulk} className="px-4 py-1.5 bg-green-900 text-white text-xs font-medium rounded-full hover:bg-green-800">전체 저장</button>
+                <button onClick={cancelBulk} className="px-4 py-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full hover:bg-gray-200">취소</button>
               </>
             ) : (
-              <button onClick={enterBulk}
-                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">
-                전체 수정
-              </button>
+              <button onClick={enterBulk} className="px-4 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full hover:bg-gray-200">전체 수정</button>
             )}
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-6 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400">
-          <span>사건명</span>
-          <span>챕터 ID</span>
-          <span>중요도</span>
-          <span>민감 여부</span>
-          <span>사건 요약</span>
-          <span>액션</span>
-        </div>
-
-        {rows.map((evt, i) => (
-          <div key={evt.event_id}
-            className={`grid grid-cols-6 px-5 py-4 items-center text-sm
-              ${evt.is_core_event ? 'bg-yellow-50/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
-              ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
-          >
-            {!readOnly && bulkMode ? (
-              <>
-                {/* 사건명 (유형 제거) */}
-                <div className="pr-2">
-                  <input value={evt.short_title || ''} onChange={e => updateDraft(evt.event_id, 'short_title', e.target.value)}
-                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full" placeholder="사건명" />
-                </div>
-
-                {/* 챕터 ID — 읽기 전용 */}
-                <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
-
-                {/* 중요도 */}
-                <input type="number" min="0" max="10" value={normalizeImportanceScore(evt.importance_score)}
-                  onChange={e => updateDraft(evt.event_id, 'importance_score', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-16" />
-
-                {/* 민감도 */}
-                <label className="flex items-center gap-1 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!evt.is_sensitive}
-                    onChange={e => updateDraft(evt.event_id, 'is_sensitive', e.target.checked)}
-                    className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
-                  <span className="text-xs text-gray-500">민감</span>
-                </label>
-
-                {/* 사건 요약 */}
-                <input value={evt.summary || ''} onChange={e => updateDraft(evt.event_id, 'summary', e.target.value)}
-                  className="border border-gray-200 rounded px-2 py-1 text-xs w-full" />
-
-                <span className="text-gray-300 text-xs">-</span>
-              </>
-            ) : !readOnly && editingId === evt.event_id ? (
-              <>
-                {/* 사건명 (유형 제거) */}
-                <div className="pr-2">
-                  <input value={editForm.short_title || ''} onChange={e => setEditForm(p => ({ ...p, short_title: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
-                </div>
-
-                {/* 챕터 ID — 읽기 전용 */}
-                <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
-
-                {/* 중요도 */}
-                <input type="number" min="0" max="10" value={normalizeImportanceScore(editForm.importance_score)}
-                  onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : parseInt(e.target.value) || 0 }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-16" />
-
-                {/* 민감도 */}
-                <label className="flex items-center gap-1 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!editForm.is_sensitive}
-                    onChange={e => setEditForm(p => ({ ...p, is_sensitive: e.target.checked }))}
-                    className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
-                  <span className="text-xs text-gray-500">민감</span>
-                </label>
-
-                {/* 사건 요약 */}
-                <input value={editForm.summary || ''} onChange={e => setEditForm(p => ({ ...p, summary: e.target.value }))}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs w-full" />
-
-                <div className="flex gap-2">
-                  <button onClick={() => handleSave(evt.event_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full">저장</button>
-                  <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">취소</button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* 사건명 (유형 서브텍스트 제거) */}
-                <span className="font-medium text-gray-900">{evt.short_title}</span>
-
-                {/* 챕터 ID */}
-                <span className="text-gray-400 text-xs">{evt.chapter_id}</span>
-
-                {/* 중요도 뱃지 */}
-                <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-max">
-                  ★ {normalizeImportanceScore(evt.importance_score)}
-                </span>
-
-                {/* 민감도 */}
-                <div>
-                  {evt.is_sensitive ? (
-                    <span className="text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">민감</span>
-                  ) : (
-                    <span className="text-[11px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">일반</span>
-                  )}
-                </div>
-
-                <span className="text-gray-500 text-xs truncate pr-2" title={evt.summary}>{evt.summary}</span>
-
-                <div className="flex gap-2">
-                  {readOnly ? (
-                    <span className="text-xs text-gray-300">-</span>
-                  ) : (
-                    <button onClick={() => handleEdit(evt)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
-                  )}
-                </div>
-              </>
-            )}
+      <div className="overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-[800px]">
+          {/* cols: 사건명(2) 챕터(2) 중요도(1) 핵심(1) 사건요약(4) 액션(2) = 12 */}
+          <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-400 gap-2">
+            <span className="col-span-2">사건명</span>
+            <span className="col-span-2">챕터</span>
+            <span className="col-span-1 text-center">중요도</span>
+            <span className="col-span-1 text-center">핵심</span>
+            <span className="col-span-4">사건 요약</span>
+            <span className="col-span-2 text-right">액션</span>
           </div>
-        ))}
+
+          {rows.map((evt, i) => (
+            <div key={evt.event_id}
+              className={`grid grid-cols-12 px-5 py-4 items-start text-sm gap-2
+                ${evt.is_core_event ? 'bg-yellow-50/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                ${i !== rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+            >
+              {/* ── 전체 수정 모드 ── */}
+              {!readOnly && bulkMode ? (
+                <>
+                  <div className="col-span-2 pr-1">
+                    <input value={evt.short_title || ''} onChange={e => updateDraft(evt.event_id, 'short_title', e.target.value)}
+                      className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900" placeholder="사건명" />
+                  </div>
+
+                  {/* 챕터 — 읽기 전용 */}
+                  <div className="col-span-2 flex flex-col text-xs pt-1">
+                    <span className="font-medium text-gray-600">
+                      {evt.chapter_order != null ? `${evt.chapter_order}화` : '-'}
+                    </span>
+                    <span className="text-gray-400 truncate" title={evt.chapter_title}>{evt.chapter_title || '-'}</span>
+                  </div>
+
+                  <div className="col-span-1 flex justify-center">
+                    <input type="number" min="0" max="1" step="0.01"
+                      value={normalizeImportanceScore(evt.importance_score)}
+                      onChange={e => updateDraft(evt.event_id, 'importance_score', e.target.value === '' ? 0 : e.target.value)}
+                      className="border border-gray-200 rounded px-1 py-1 text-xs w-14 text-center focus:outline-green-900" />
+                  </div>
+
+                  <div className="col-span-1 flex justify-center pt-1">
+                    <input type="checkbox" checked={!!evt.is_core_event}
+                      onChange={e => updateDraft(evt.event_id, 'is_core_event', e.target.checked)}
+                      className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
+                  </div>
+
+                  <div className="col-span-4">
+                    <textarea value={evt.summary || ''} onChange={e => updateDraft(evt.event_id, 'summary', e.target.value)}
+                      rows={3} className="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-green-900 resize-none leading-relaxed" />
+                  </div>
+
+                  <div className="col-span-2 text-right text-gray-400 text-xs pt-1">수정 중</div>
+                </>
+
+              /* ── 단건 수정 모드 ── */
+              ) : !readOnly && editingId === evt.event_id ? (
+                <>
+                  <div className="col-span-2 pr-1">
+                    <input value={editForm.short_title || ''} onChange={e => setEditForm(p => ({ ...p, short_title: e.target.value }))}
+                      className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900" />
+                  </div>
+
+                  {/* 챕터 — 읽기 전용 */}
+                  <div className="col-span-2 flex flex-col text-xs pt-1">
+                    <span className="font-medium text-gray-600">
+                      {evt.chapter_order != null ? `${evt.chapter_order}화` : '-'}
+                    </span>
+                    <span className="text-gray-400 truncate" title={evt.chapter_title}>{evt.chapter_title || '-'}</span>
+                  </div>
+
+                  <div className="col-span-1 flex justify-center">
+                    <input type="number" min="0" max="1" step="0.01"
+                      value={normalizeImportanceScore(editForm.importance_score)}
+                      onChange={e => setEditForm(p => ({ ...p, importance_score: e.target.value === '' ? 0 : e.target.value }))}
+                      className="border border-gray-300 rounded px-1 py-1 text-xs w-14 text-center focus:outline-green-900" />
+                  </div>
+
+                  <div className="col-span-1 flex justify-center pt-1">
+                    <input type="checkbox" checked={!!editForm.is_core_event}
+                      onChange={e => setEditForm(p => ({ ...p, is_core_event: e.target.checked }))}
+                      className="rounded border-gray-300 text-green-900 focus:ring-green-900 w-4 h-4" />
+                  </div>
+
+                  <div className="col-span-4">
+                    <textarea value={editForm.summary || ''} onChange={e => setEditForm(p => ({ ...p, summary: e.target.value }))}
+                      rows={3} className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-green-900 resize-none leading-relaxed" />
+                  </div>
+
+                  <div className="col-span-2 flex gap-1 justify-end flex-wrap pt-1">
+                    <button onClick={() => handleSave(evt.event_id)} className="px-3 py-1 bg-green-900 text-white text-xs rounded-full hover:bg-green-800">저장</button>
+                    <button onClick={handleCancel} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">취소</button>
+                  </div>
+                </>
+
+              /* ── 읽기 모드 ── */
+              ) : (
+                <>
+                  <div className="col-span-2">
+                    <span className="font-medium text-gray-900 text-xs leading-snug block">{evt.short_title}</span>
+                  </div>
+
+                  <div className="col-span-2 flex flex-col text-xs">
+                    <span className="font-medium text-gray-600">
+                      {evt.chapter_order != null ? `${evt.chapter_order}화` : '-'}
+                    </span>
+                    <span className="text-gray-400 truncate" title={evt.chapter_title}>{evt.chapter_title || '-'}</span>
+                  </div>
+
+                  <div className="col-span-1 flex justify-center pt-0.5">
+                    <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-max">
+                      {Number(normalizeImportanceScore(evt.importance_score)).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="col-span-1 text-center pt-0.5">
+                    {evt.is_core_event
+                      ? <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold">CORE</span>
+                      : <span className="text-gray-300 text-xs">-</span>}
+                  </div>
+
+                  <div className="col-span-4">
+                    <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-wrap break-words pr-2">
+                      {evt.summary}
+                    </p>
+                  </div>
+
+                  <div className="col-span-2 text-right pt-0.5">
+                    {readOnly ? <span className="text-xs text-gray-300">-</span> : (
+                      <button onClick={() => handleEdit(evt)} className="px-3 py-1 bg-gray-100 text-gray-500 text-xs rounded-full hover:bg-gray-200">수정</button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
 /* ============================================================
-   서브 컴포넌트: StepPanel
-   - 탭 방식: 현재 선택된 단계 하나만 화면에 렌더링됨
-   - readOnly 모드일 때는 카드 하나에 안내 문구만 표시 (탭 전환 의미 없음 → 호출하는 쪽에서 분기)
+   StepPanel
 ============================================================ */
-
 function StepPanel({ step, index, total, onComplete, onPrev, children, isFirst }) {
   return (
     <div className="rounded-2xl border border-green-100 bg-white overflow-hidden">
@@ -722,25 +645,18 @@ function StepPanel({ step, index, total, onComplete, onPrev, children, isFirst }
         </div>
         <div className="flex gap-2">
           {!isFirst && (
-            <button
-              onClick={onPrev}
-              className="px-4 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-full hover:bg-gray-50"
-            >
+            <button onClick={onPrev}
+              className="px-4 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-full hover:bg-gray-50">
               ← 이전 단계
             </button>
           )}
-          <button
-            onClick={onComplete}
-            className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800"
-          >
+          <button onClick={onComplete}
+            className="px-5 py-1.5 bg-green-900 text-white text-xs font-semibold rounded-full hover:bg-green-800">
             검수 완료 →
           </button>
         </div>
       </div>
-
-      <div className="px-6 pb-6 pt-5">
-        {children}
-      </div>
+      <div className="px-6 pb-6 pt-5">{children}</div>
     </div>
   )
 }
@@ -748,26 +664,17 @@ function StepPanel({ step, index, total, onComplete, onPrev, children, isFirst }
 /* ============================================================
    메인 컴포넌트
 ============================================================ */
-
 function Review() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [books, setBooks]               = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
   const [stepStatus, setStepStatus]     = useState(initialStepStatus)
-  // 탭 방식 핵심: 현재 화면에 보여줄 단계를 별도로 관리.
-  // "검수 완료"를 누르면 currentStep이 다음 단계로 바뀌어 화면이 즉시 전환된다.
   const [currentStep, setCurrentStep]   = useState(STEPS[0].key)
-
-  // 1) DB 저장(approveAnalysisForReview) 관련 상태
   const [saving, setSaving]   = useState(false)
-  const [saved, setSaved]     = useState(false)   // 저장 성공 여부 -> 최종 승인 버튼 활성화 조건
-
-  // 2) 최종 승인(파이프라인 실행, summarizeBook) 관련 상태
+  const [saved, setSaved]     = useState(false)
   const [approving, setApproving] = useState(false)
 
-  // 선택된 책이 이미 1차 검수 완료(ANALYZING_COMPLETE) 상태인지 여부
-  // -> 읽기 전용 모드. 저장 단계 없이 바로 최종 승인 가능.
   const isReadOnlyBook = selectedBook?.status === 'ANALYZING_COMPLETE'
 
   const charActive  = isReadOnlyBook || stepStatus.characters !== 'pending'
@@ -784,7 +691,6 @@ function Review() {
     getAdminBooks()
       .then(data => {
         const allBooks = data.books || []
-        // ANALYZING_FINISHED / ANALYZING_COMPLETE 상태인 책만 검수 대상으로 노출
         setBooks(allBooks.filter(b => REVIEWABLE_STATUSES.includes(b.status)))
       })
       .catch(err => console.error(err))
@@ -798,7 +704,6 @@ function Review() {
     }
   }, [books, searchParams])
 
-  // 서버 호출 없이 로컬 상태만 전환. 다음 단계를 활성화하고 화면도 그 단계로 이동한다.
   const handleComplete = (stepKey) => {
     const idx  = STEPS.findIndex(s => s.key === stepKey)
     const next = STEPS[idx + 1]
@@ -807,20 +712,13 @@ function Review() {
       [stepKey]: 'done',
       ...(next ? { [next.key]: 'active' } : {}),
     }))
-    // 단계가 다시 진행되었으니 저장 상태는 초기화 (다시 저장해야 최종 승인 가능)
     setSaved(false)
-    // 화면 전환: 다음 단계가 있으면 그 탭으로, 없으면 마지막 단계에 머무름(allDone 영역이 아래에 노출됨)
     if (next) setCurrentStep(next.key)
   }
 
-  // 화면을 이전 단계 탭으로 이동시킨다. (저장 중 오류가 발생했을 때 데이터를 다시 수정할 수 있도록)
-  // 이동만 할 뿐 done 상태를 active로 되돌리지는 않음 — 데이터는 그대로 보존된 채 다시 보고 고칠 수 있음.
   const handleGoToPrevStep = () => {
     const idx = STEPS.findIndex(s => s.key === currentStep)
     if (idx <= 0) return
-    const prevKey = STEPS[idx - 1].key
-    // 이전 단계가 done이었다면 다시 active로 풀어서 수정 가능하게 하고,
-    // 그 뒤(현재 단계 포함) 단계들은 pending으로 되돌린다.
     setStepStatus(prev => {
       const next = { ...prev }
       STEPS.forEach((step, i) => {
@@ -831,23 +729,18 @@ function Review() {
       return next
     })
     setSaved(false)
-    setCurrentStep(prevKey)
+    setCurrentStep(STEPS[idx - 1].key)
   }
 
-  // StepIndicator 탭 클릭으로 이미 도달한(done/active) 단계로 바로 이동
-  const handleStepClick = (stepKey) => {
-    setCurrentStep(stepKey)
-  }
+  const handleStepClick = (stepKey) => setCurrentStep(stepKey)
 
   const handleBookSelect = (book) => {
     setSelectedBook(book)
     setStepStatus(initialStepStatus)
     setCurrentStep(STEPS[0].key)
-    // 이미 1차 검수 완료된 책은 저장 단계 없이 바로 최종 승인 가능
     setSaved(book.status === 'ANALYZING_COMPLETE')
   }
 
-  // ANALYZING_FINISHED 책의 3단계 검수 완료 후: 인물/관계/사건 데이터를 한 번에 DB에 저장
   const handleSaveReview = async () => {
     setSaving(true)
     try {
@@ -856,12 +749,7 @@ function Review() {
         relations:  relData.data.map(r => ({ ...r, importance_score: normalizeImportanceScore(r.importance_score) })),
         events:     eventData.data.map(e => ({ ...e, importance_score: normalizeImportanceScore(e.importance_score) })),
       })
-
-      if (res?.error) {
-        alert(`저장 실패: ${res.message}`)
-        return
-      }
-
+      if (res?.error) { alert(`저장 실패: ${res.message}`); return }
       setSaved(true)
     } catch (err) {
       alert(`저장 실패: ${err.message}`)
@@ -870,17 +758,11 @@ function Review() {
     }
   }
 
-  // 저장 완료(또는 ANALYZING_COMPLETE) 후에만 호출 가능: 다음 파이프라인 실행 (body 없음)
   const handleFinalApprove = async () => {
     setApproving(true)
     try {
       const res = await summarizeBook(bookId)
-
-      if (res?.error) {
-        alert(`최종 승인 실패: ${res.message}`)
-        return
-      }
-
+      if (res?.error) { alert(`최종 승인 실패: ${res.message}`); return }
       const newLog = {
         time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
         type: 'running',
@@ -894,7 +776,7 @@ function Review() {
     } finally {
       setApproving(false)
     }
-  } 
+  }
 
   if (!selectedBook) {
     return (
@@ -907,8 +789,7 @@ function Review() {
           <div className="flex gap-6 flex-wrap">
             {books.map(book => (
               <div key={book.books_id} className="flex flex-col gap-2">
-                <div
-                  onClick={() => handleBookSelect(book)}
+                <div onClick={() => handleBookSelect(book)}
                   className="w-40 h-52 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex items-end"
                   style={{
                     backgroundImage: book.cover_url ? `url(${book.cover_url})` : 'none',
@@ -934,24 +815,14 @@ function Review() {
   const allDone = isReadOnlyBook || STEPS.every(s => stepStatus[s.key] === 'done')
   const currentIndex = STEPS.findIndex(s => s.key === currentStep)
 
-  const stepDataMap = {
-    characters: charData,
-    relations:  relData,
-    events:     eventData,
-  }
-
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => setSelectedBook(null)}
-          className="text-sm text-green-800 font-semibold hover:text-green-600"
-        >
+        <button onClick={() => setSelectedBook(null)}
+          className="text-sm text-green-800 font-semibold hover:text-green-600">
           ← 책 목록
         </button>
-        <h1 className="text-xl font-bold text-gray-900">
-          {selectedBook.title} — 데이터 검수
-        </h1>
+        <h1 className="text-xl font-bold text-gray-900">{selectedBook.title} — 데이터 검수</h1>
         {isReadOnlyBook && (
           <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
             1차 검수 완료 · 읽기 전용
@@ -961,16 +832,12 @@ function Review() {
 
       {!isReadOnlyBook && (
         <StepIndicator
-          steps={STEPS}
-          status={stepStatus}
-          currentStep={currentStep}
-          onStepClick={handleStepClick}
-          readOnly={isReadOnlyBook}
+          steps={STEPS} status={stepStatus} currentStep={currentStep}
+          onStepClick={handleStepClick} readOnly={isReadOnlyBook}
         />
       )}
 
       {isReadOnlyBook ? (
-        // 읽기 전용 모드: 탭 전환 없이 3개 단계를 모두 펼쳐서 한 번에 보여줌
         <div className="space-y-4">
           {STEPS.map((step) => (
             <div key={step.key} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -979,80 +846,22 @@ function Review() {
                 <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">읽기 전용</span>
               </div>
               <div className="px-6 pb-6 pt-5">
-                {step.key === 'characters' && (
-                  <CharacterTable
-                    characters={charData.data}
-                    setCharacters={charData.setData}
-                    loading={charData.loading}
-                    error={charData.error}
-                    onRetry={charData.reload}
-                    readOnly
-                  />
-                )}
-                {step.key === 'relations' && (
-                  <RelationTable
-                    data={relData.data}
-                    setData={relData.setData}
-                    loading={relData.loading}
-                    error={relData.error}
-                    onRetry={relData.reload}
-                    readOnly
-                  />
-                )}
-                {step.key === 'events' && (
-                  <EventTable
-                    data={eventData.data}
-                    setData={eventData.setData}
-                    loading={eventData.loading}
-                    error={eventData.error}
-                    onRetry={eventData.reload}
-                    readOnly
-                  />
-                )}
+                {step.key === 'characters' && <CharacterTable characters={charData.data} setCharacters={charData.setData} loading={charData.loading} error={charData.error} onRetry={charData.reload} readOnly />}
+                {step.key === 'relations'  && <RelationTable  data={relData.data}   setData={relData.setData}   loading={relData.loading}   error={relData.error}   onRetry={relData.reload}   readOnly />}
+                {step.key === 'events'     && <EventTable     data={eventData.data} setData={eventData.setData} loading={eventData.loading} error={eventData.error} onRetry={eventData.reload} readOnly />}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        // 일반 모드: 탭 방식. 현재 단계 하나만 렌더링.
         <StepPanel
-          step={STEPS[currentIndex]}
-          index={currentIndex}
-          total={STEPS.length}
-          isFirst={currentIndex === 0}
-          onPrev={handleGoToPrevStep}
+          step={STEPS[currentIndex]} index={currentIndex} total={STEPS.length}
+          isFirst={currentIndex === 0} onPrev={handleGoToPrevStep}
           onComplete={() => handleComplete(currentStep)}
         >
-          {currentStep === 'characters' && (
-            <CharacterTable
-              characters={charData.data}
-              setCharacters={charData.setData}
-              loading={charData.loading}
-              error={charData.error}
-              onRetry={charData.reload}
-              readOnly={false}
-            />
-          )}
-          {currentStep === 'relations' && (
-            <RelationTable
-              data={relData.data}
-              setData={relData.setData}
-              loading={relData.loading}
-              error={relData.error}
-              onRetry={relData.reload}
-              readOnly={false}
-            />
-          )}
-          {currentStep === 'events' && (
-            <EventTable
-              data={eventData.data}
-              setData={eventData.setData}
-              loading={eventData.loading}
-              error={eventData.error}
-              onRetry={eventData.reload}
-              readOnly={false}
-            />
-          )}
+          {currentStep === 'characters' && <CharacterTable characters={charData.data} setCharacters={charData.setData} loading={charData.loading} error={charData.error} onRetry={charData.reload} readOnly={false} />}
+          {currentStep === 'relations'  && <RelationTable  data={relData.data}   setData={relData.setData}   loading={relData.loading}   error={relData.error}   onRetry={relData.reload}   readOnly={false} />}
+          {currentStep === 'events'     && <EventTable     data={eventData.data} setData={eventData.setData} loading={eventData.loading} error={eventData.error} onRetry={eventData.reload} readOnly={false} />}
         </StepPanel>
       )}
 
@@ -1072,19 +881,13 @@ function Review() {
           </div>
           <div className="flex gap-2">
             {!isReadOnlyBook && (
-              <button
-                onClick={handleSaveReview}
-                disabled={saving}
-                className="px-6 py-2 bg-white border border-green-900 text-green-900 text-sm font-semibold rounded-full hover:bg-green-50 disabled:opacity-50"
-              >
+              <button onClick={handleSaveReview} disabled={saving}
+                className="px-6 py-2 bg-white border border-green-900 text-green-900 text-sm font-semibold rounded-full hover:bg-green-50 disabled:opacity-50">
                 {saving ? '저장 중…' : saved ? '저장됨 ✓' : '저장'}
               </button>
             )}
-            <button
-              onClick={handleFinalApprove}
-              disabled={!saved || approving}
-              className="px-6 py-2 bg-green-900 text-white text-sm font-semibold rounded-full hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleFinalApprove} disabled={!saved || approving}
+              className="px-6 py-2 bg-green-900 text-white text-sm font-semibold rounded-full hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed">
               {approving ? '처리 중…' : '최종 승인'}
             </button>
           </div>
