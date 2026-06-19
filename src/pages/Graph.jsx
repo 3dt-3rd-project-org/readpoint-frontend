@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import cytoscape from 'cytoscape'
 import { Plus, Minus, Maximize2, Save } from 'lucide-react'
 import { getBooks, getBookRelations, getBookChapters, getBookEvents, getBookmarkByUserId } from '../api'
@@ -13,7 +13,7 @@ function Graph() {
   const cyInstance = useRef(null)
   const bookId = searchParams.get('bookId')
   const [summaryExpanded, setSummaryExpanded] = useState(false)
-
+  const location = useLocation()
   const [isDirty, setIsDirty] = useState(false)
   const [currentChapter, setCurrentChapter] = useState(1)
   const [selectedEvent, setSelectedEvent] = useState(null)
@@ -84,7 +84,7 @@ function Graph() {
     getBookmarkByUserId(bookId)
       .then(data => setUserProgress(data))
       .catch(() => setUserProgress(null))
-  }, [bookId])
+  }, [bookId, location.key])
 
   // userProgress 로드되면 currentChapter 초기화
   useEffect(() => {
