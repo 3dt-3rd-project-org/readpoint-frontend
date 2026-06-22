@@ -58,7 +58,8 @@ function Dashboard() {
     failedRequests: 0,
     avgResponseTime: 0,
     successRate: 0,
-    requestsByOperation: []
+    requestsByOperation: [],
+    failedDetails: [],
   })
 
   // 파이프라인 알림 로그 - localStorage에 저장해서 탭 이동 후에도 유지
@@ -150,7 +151,6 @@ function Dashboard() {
         text: logText
       }, ...prev].slice(0, 50))
 
-      // 상태 변경이 있는 이벤트 수신 시 책 목록 갱신
       if (['ANALYZING_FINISHED', 'ANALYZING_ERROR', 'SUMMARIZING_COMPLETE', 'SUMMARY_ERROR', 'METADATA_COMPLETE', 'METADATA_ERROR'].includes(incomingStatus)) {
         fetchBooks()
       }
@@ -172,6 +172,7 @@ function Dashboard() {
     setFile(selectedFile)
   }
 
+  // 드래그앤드롭
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
@@ -250,7 +251,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 지표 카드 4개 - 로딩 중 스켈레톤 */}
+        {/* 지표 카드 4개 */}
         <div className="grid grid-cols-4 gap-4 mb-4">
           {isLoadingInsights ? (
             Array(4).fill(0).map((_, i) => (
@@ -283,8 +284,8 @@ function Dashboard() {
           )}
         </div>
 
-        {/* 차트 영역 - 로딩 중 스켈레톤 */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* 차트 영역 */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
           {isLoadingInsights ? (
             <>
               <div className="col-span-2 bg-white rounded-xl border border-gray-200 px-5 py-4">
@@ -298,7 +299,6 @@ function Dashboard() {
             </>
           ) : (
             <>
-              {/* 함수별 요청 수 바 차트 */}
               <div className="col-span-2 bg-white rounded-xl border border-gray-200 px-5 py-4">
                 <p className="text-xs text-gray-400 mb-3">함수별 요청 수</p>
                 <ResponsiveContainer width="100%" height={250}>
@@ -319,7 +319,6 @@ function Dashboard() {
                 </ResponsiveContainer>
               </div>
 
-              {/* 성공/실패 비율 도넛 차트 */}
               <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
                 <p className="text-xs text-gray-400 mb-3">성공 / 실패 비율</p>
                 <ResponsiveContainer width="100%" height={180}>
@@ -334,6 +333,50 @@ function Dashboard() {
                 </ResponsiveContainer>
               </div>
             </>
+          )}
+        </div>
+
+        {/* 실패 요청 상세 테이블 */}
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-400">실패 요청 상세</p>
+            <p className="text-xs text-gray-300">최근 20건</p>
+          </div>
+          {isLoadingInsights ? (
+            <div className="space-y-2">
+              {Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+            </div>
+          ) : !insights.failedDetails || insights.failedDetails.length === 0 ? (
+            <p className="text-xs text-gray-400 py-4 text-center">실패 요청이 없습니다.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400">
+                  <th className="text-left pb-2 font-medium">시간</th>
+                  <th className="text-left pb-2 font-medium">함수명</th>
+                  <th className="text-left pb-2 font-medium">에러코드</th>
+                  <th className="text-right pb-2 font-medium">응답시간</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {insights.failedDetails.map((row, i) => (
+                  <tr key={i}>
+                    <td className="py-2 text-gray-400">
+                      {new Date(row.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </td>
+                    <td className="py-2 text-gray-700">{row.name}</td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        row.resultCode >= 500 ? 'bg-red-50 text-red-500' : 'bg-yellow-50 text-yellow-700'
+                      }`}>
+                        {row.resultCode}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right text-gray-500">{formatMs(row.duration)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
@@ -377,7 +420,6 @@ function Dashboard() {
             <span>제목</span><span>저자</span><span>상태</span><span>조치</span>
           </div>
 
-          {/* 로딩 중 스켈레톤 행 */}
           {isLoadingBooks ? (
             Array(4).fill(0).map((_, i) => (
               <div key={i} className="grid grid-cols-4 px-5 py-4 items-center border-b border-gray-100">
@@ -402,14 +444,10 @@ function Dashboard() {
                 >
                   <span className="font-medium text-gray-900">{book.title}</span>
                   <span className="text-gray-400">{book.author}</span>
-
-                  {/* 상태 - lucide 아이콘 + 텍스트 */}
                   <span className={`font-medium flex items-center gap-1 ${statusInfo?.className || 'text-gray-500'}`}>
                     {statusInfo?.icon}
                     {statusInfo?.label || book.status}
                   </span>
-
-                  {/* 조치 버튼 - 상태에 따라 다르게 표시 */}
                   <span className="flex gap-2">
                     {book.status === 'READY' && (
                       <button
